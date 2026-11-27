@@ -1,0 +1,38 @@
+{
+  "chatDuringCall": {
+    "exactRead": true,
+    "audioStates": [
+      4,
+      4
+    ]
+  },
+  "ended": [
+    {
+      "audioState": 5,
+      "audioCaptureActive": 0,
+      "videoSource": 0,
+      "videoCameraFrames": 0
+    },
+    {
+      "audioState": 5,
+      "audioCaptureActive": 0,
+      "videoSource": 0,
+      "videoCameraFrames": 0
+    }
+  ],
+  "cameraCountersStopped": true,
+  "reverseCall": [
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioAcceptedFrames": 34,
+      "audioNonzeroPlayback": 7138
+    },
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioAcceptedFrames": 18,
+      "audioNonzeroPlayback": 2206
+    }
+  ]
+}

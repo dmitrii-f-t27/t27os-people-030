@@ -1,0 +1,20 @@
+{
+  "phase": "fresh-three-message-read",
+  "allMessagesRead": true,
+  "participants": [
+    {
+      "chatState": 4,
+      "messageCount": 3,
+      "chatReadRx": 2,
+      "chatReadTx": 1,
+      "chatSessions": 1
+    },
+    {
+      "chatState": 4,
+      "messageCount": 3,
+      "chatReadRx": 1,
+      "chatReadTx": 2,
+      "chatSessions": 1
+    }
+  ]
+}

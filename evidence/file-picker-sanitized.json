@@ -1,0 +1,12 @@
+{
+  "atUTC": "2026-11-27T22:14:43.830608+00:00",
+  "operator": "root independent physical M4 native GUI",
+  "nativePanel": true,
+  "fixture": "file-insert-fixture.txt",
+  "fixtureCharacters": 91,
+  "fixtureBytes": 91,
+  "exactFixtureInsertedIntoComposer": true,
+  "automaticallySent": false,
+  "composerClearedAndPlaceholderVerified": true,
+  "scope": "actual NSOpenPanel, Go to Folder, selected file, Insert text button; owner foreground consent handled by root"
+}

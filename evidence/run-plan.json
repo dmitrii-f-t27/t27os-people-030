@@ -1,0 +1,23 @@
+{
+  "profiles": [
+    "Анна · M1",
+    "Михаил · M4"
+  ],
+  "messages": [
+    "Привет! Проверим связь?",
+    "Да, я на связи.",
+    "Отлично, звоню."
+  ],
+  "ports": [
+    64101,
+    64201
+  ],
+  "scope": "fresh two-Mac RAM QA identities; no timestamp nonce in visible message body",
+  "phases": [
+    "chat READ + two screenshots",
+    "clickable Connection/trusted/back/route + two screenshots while verified",
+    "source2 video-only call + two explicitly synthetic screenshots",
+    "no images: genuine duplex microphones/cameras + reverse call, mute, camera toggles, chat, End",
+    "normal shell regression"
+  ]
+}
