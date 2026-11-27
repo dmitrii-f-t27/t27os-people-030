@@ -1,5 +1,7 @@
 # Release QA rules
 
+Before publishing a release, pushing or merging externally, or sending an external message, verify explicit owner approval for that action.
+
 1. Check first: before a future fix, save a small failing reproducible check, exact source/binary hash and scope. Split lightweight work; run heavy builds/tests sequentially; retry only the affected checks. Never fabricate an earlier red execution.
 2. Preserve working results: change only required `.t27` logic, keep prior binaries/evidence and foreign work, and verify directly affected native paths. Public source distribution is not canonical upstream permission.
 3. READ activation: the bridge may consume ACTIVE before the chat driver. Both paths must share authenticated activation exactly once, reset retry without downgrading DELIVERED/READ, and propagate status into persistence. The observed missing reverse READ and targeted recovery probe are separate evidence; the original first-loss cause was not established.
