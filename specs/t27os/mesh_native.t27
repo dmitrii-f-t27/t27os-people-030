@@ -1,0 +1,842 @@
+use t27os::call_core::CK_INVITE_LEN;
+use t27os::call_core::ck_hdr_admit;
+use t27os::peer_identity_host::ih_fingerprint;
+use t27os::mesh_wire::MW_HASH;
+use t27os::mesh_wire::MW_HOPS;
+use t27os::mesh_wire::mw_fresh;
+use t27os::mesh_wire::mw_length;
+use t27os::mesh_wire::mw_signable;
+use t27os::mesh_wire::mw_ttl_ok;
+use t27os::mesh_wire::mw_zero;
+use t27os::keysync_host::ks_verify;
+use t27os::keysync_host::ks_sha256;
+use t27os::call_core::ck_hdr_type;
+use t27os::call_core::CK_T_INVITE;
+// SPDX-License-Identifier: Apache-2.0
+// Ordinary native People data plane. Trusted local neighbors only; no network address in a frame.
+use t27os::mesh_wire::MW_BASE;
+use t27os::mesh_wire::MW_PROOF;
+use t27os::mesh_wire::MW_MAX;
+use t27os::mesh_wire::MW_BODY;
+use t27os::mesh_wire::MW_ORIGIN;
+use t27os::mesh_wire::MW_FINAL;
+use t27os::mesh_wire::mw_copy;
+use t27os::mesh_wire::mw_shape;
+use t27os::mesh_wire::mw_verify;
+use t27os::mesh_wire::mw_canonical;
+use t27os::mesh_wire::mw_begin;
+use t27os::mesh_wire::mw_proof;
+use t27os::mesh_wire::mw_append;
+use t27os::mesh_wire::mw_at;
+use t27os::mesh_wire::mw_payload_at;
+use t27os::mesh_wire::mw_seen;
+use t27os::mesh_wire::mw_direction;
+use t27os::mesh_wire::mw_replay_ok;
+use t27os::mesh_wire::mw_replay_mask;
+use t27os::mesh_wire::mw_route;
+use t27os::call_core::ck_wipe;
+use t27os::call_core::ck_same;
+use t27os::call_core::get_u64;
+use t27os::call_core::put_u64;
+use t27os::keysync_host::ks_public_valid;
+use t27os::voice_address::va_ipv4;
+const MN_BYTES:usize=16384;
+const M_ROOT:usize=0;const M_NET:usize=8;const M_CHAT:usize=16;const M_MEDIA:usize=24;
+const M_LOCAL:usize=32;const M_PROXY:usize=40;const M_PORT:usize=48;
+const M_ACTIVE:usize=56;const M_FORWARD:usize=64;const M_BUDGET_AT:usize=72;const M_BUDGET:usize=80;
+const M_HOP_SEQ:usize=88;const M_ORIGIN_SEQ:usize=96;const M_CIRCUIT_SET:usize=104;
+const M_CIRCUIT:usize=112;const M_ORIGIN_EPOCH:usize=128;const M_EPOCH:usize=144;
+const M_PUBLIC:usize=160;const M_FINAL:usize=232;const M_TTL:usize=304;const M_BOUND:usize=312;
+const M_SENT:usize=320;const M_RECEIVED:usize=328;const M_FORWARDED:usize=336;const M_DELIVERED:usize=344;
+const M_DROPPED:usize=352;const M_SIGNATURE:usize=360;const M_BAD_EPOCH:usize=368;const M_REPLAY:usize=376;
+const M_EXPIRED:usize=384;const M_NO_ROUTE:usize=392;const M_ERRNO:usize=400;const M_FORWARD_BYTES:usize=408;
+const M_DELIVER_BYTES:usize=416;const M_LARGEST:usize=424;const M_ERROR:usize=432;const M_OVERSIZE:usize=440;
+const M_ROUTE_REASON:usize=448;const M_SEEN_ACTIVE:usize=456;const M_DISCOVERY:usize=464;const M_AUTO_RECEIVE:usize=472;const M_AUTO_DIRECTORY:usize=480;const M_AUTO_RESULT:usize=488;
+const M_NEIGHBORS:usize=512;const M_NEIGHBOR:usize=256;const M_ROUTES:usize=2048;const M_ROUTE:usize=80;
+const M_CIRCUITS:usize=4096;const M_CIRCUIT_ITEM:usize=512;
+const N_IP:usize=72;const N_PORT:usize=80;const N_READY:usize=88;const N_EPOCH:usize=96;const N_CHALLENGE:usize=112;
+const N_CHALLENGE_UNTIL:usize=128;const N_NEXT:usize=136;const N_HIGH:usize=144;const N_MASK:usize=152;const N_HELLO_AT:usize=160;const N_HELLO_COUNT:usize=168;const N_FORWARD:usize=176;
+const C_ID:usize=136;const C_UNTIL:usize=152;const C_CLOSED:usize=160;const C_LEFT:usize=168;const C_RIGHT:usize=176;
+const C_EPOCH0:usize=184;const C_EPOCH1:usize=200;const C_EPOCH_MASK:usize=216;const C_WINDOWS:usize=224;
+struct MNView {bytes:[]u8}
+fn mn_calloc(n:u64,size:u64)->u64 {return @extern("calloc");}
+fn mn_free(p:u64)->void {@extern("free");}
+fn mn_vcopy(v:MNView,words:[2]u64,n:u64)->u64 {return @extern("memmove");}
+fn mn_view(p:u64)->MNView {var v:MNView=undefined;var w:[2]u64=undefined;w[0]=p;w[1]=MN_BYTES;mn_vcopy(v,w,16);return v;}
+fn mn_socket(a:i32,b:i32,c:i32)->i32 {return @extern("socket");}
+fn mn_bind(fd:i32,sa:[]const u8,n:u32)->i32 {return @extern("bind");}
+fn mn_sockname(fd:i32,sa:[]u8,n:[1]u32)->i32 {return @extern("getsockname");}
+fn mn_fcntl(fd:i32,op:i32,arg:u64)->i32 {return @extern("__fcntl");}
+fn mn_close_fd(fd:i32)->i32 {return @extern("close");}
+fn mn_recv(fd:i32,b:[]u8,n:u64,flags:i32,sa:[]u8,len:[1]u32)->i64 {return @extern("recvfrom");}
+fn mn_send(fd:i32,b:[]const u8,n:u64,flags:i32,sa:[]const u8,len:u32)->i64 {return @extern("sendto");}
+fn mn_time(tv:[2]i64,tz:u64)->i32 {return @extern("gettimeofday");}
+fn mn_random(r:u64,n:u64,out:[]u8)->i32 {return @extern("SecRandomCopyBytes");}
+fn mn_errno_ptr()->u64 {return @extern("__error");}
+fn mn_peek(out:[]u8,p:u64,n:u64)->u64 {return @extern("memmove");}
+fn mn_cls(n:[]const u8)->u64 {return @extern("objc_getClass");}
+fn mn_sel(n:[]const u8)->u64 {return @extern("sel_registerName");}
+fn mn_m0(o:u64,s:u64)->u64 {return @extern("objc_msgSend");}
+fn mn_m1(o:u64,s:u64,a:u64)->u64 {return @extern("objc_msgSend");}
+fn mn_cf_new(a:u64,b:[]const u8,n:usize,enc:u32,ext:bool)->u64 {return @extern("CFStringCreateWithBytes");}
+fn mn_auto(o:u64)->u64 {return @extern("objc_autorelease");}
+fn mn_cf(b:[]const u8)->u64 {return mn_auto(mn_cf_new(0,b,b.len,134217984,false));}
+fn mn_root_public(root:u64,out:[]u8,peer:bool)->bool {return @extern("sc_directory_public");}
+fn mn_root_sign(root:u64,msg:[]const u8,n:u64,out:[]u8,cap:u64)->u64 {return @extern("sc_mesh_sign");}
+fn mn_root_pair(root:u64,card:u64,ip:u64,port:u64)->bool {return @extern("sc_pair");}
+fn mn_root_direct(root:u64,ip:u64,port:u64)->bool {return @extern("sc_direct");}
+fn mn_root_connect(root:u64,audio:bool)->bool {return @extern("sc_connect");}
+fn mn_root_state(root:u64,audio:bool)->u32 {return @extern("sc_state");}
+fn mn_root_pause(root:u64,pause:bool)->bool {return @extern("sc_route_pause");}
+fn mn_now()->u64 {var tv:[2]i64=undefined;tv[0]=0;tv[1]=0;if(mn_time(tv,0)!=0 or tv[0]<0){return 0;}return @as(u64,@intCast(tv[0]))*1000+@as(u64,@intCast(tv[1]))/1000;}
+fn mn_inc(b:[]u8,at:usize,n:u64)->void {put_u64(b,at,get_u64(b,at)+n);}
+fn mn_neighbor_at(slot:u64)->usize {return M_NEIGHBORS+@as(usize,slot-1)*M_NEIGHBOR;}
+fn mn_addr(out:[]u8,ip:u64,port:u64)->void {
+ ck_wipe(out);out[0]=16;out[1]=2;out[2]=@as(u8,@intCast(port/256));out[3]=@as(u8,@intCast(port%256));
+ out[4]=@as(u8,@intCast((ip>>24)&255));out[5]=@as(u8,@intCast((ip>>16)&255));out[6]=@as(u8,@intCast((ip>>8)&255));out[7]=@as(u8,@intCast(ip&255));
+}
+fn mn_source_ip(sa:[]const u8)->u64 {return @as(u64,sa[4])*16777216+@as(u64,sa[5])*65536+@as(u64,sa[6])*256+@as(u64,sa[7]);}
+fn mn_source_port(sa:[]const u8)->u64 {return @as(u64,sa[2])*256+@as(u64,sa[3]);}
+fn mn_udp(ip:u64,port:u64)->i32 {
+ const fd:i32=mn_socket(2,2,0);if(fd<0){return -1;}var sa:[16]u8=undefined;mn_addr(sa[0..16],ip,port);
+ if(mn_bind(fd,sa[0..16],16)!=0 or mn_fcntl(fd,4,4)!=0){mn_close_fd(fd);return -1;}return fd;
+}
+fn mn_proxy_open(b:[]u8)->bool {
+ var tries:u32=0;while(tries<8){const chat:i32=mn_udp(2130706433,0);if(chat<0){return false;}
+  var sa:[16]u8=undefined;var n:[1]u32=undefined;n[0]=16;
+  if(mn_sockname(chat,sa[0..16],n)==0){const port:u64=mn_source_port(sa[0..16]);if(port>0 and port<=65525){const media:i32=mn_udp(2130706433,port+10);if(media>=0){put_u64(b,M_CHAT,@as(u64,@intCast(chat+1)));put_u64(b,M_MEDIA,@as(u64,@intCast(media+1)));put_u64(b,M_PROXY,port);return true;}}}
+  mn_close_fd(chat);tries=tries+1;
+ }return false;
+}
+pub fn mn_endpoint_ok(ip:u64,port:u64)->bool {return ip>=16777216 and ip<3758096384 and ip/16777216!=169 and port>0 and port<=65535;}
+fn mn_nibble(c:u8)->u32 {if(c>=48 and c<=57){return @as(u32,c-48);}if(c>=97 and c<=102){return @as(u32,c-97)+10;}if(c>=65 and c<=70){return @as(u32,c-65)+10;}return 255;}
+fn mn_parse(card:u64,public_key:[]u8,endpoint:[]u64)->bool {
+ if(card==0 or public_key.len<65 or endpoint.len<2){return false;}const n:u64=mn_m1(card,mn_sel("lengthOfBytesUsingEncoding:"),4);if(n<136 or n>=200){return false;}
+ var raw:[200]u8=undefined;mn_peek(raw[0..@as(usize,n)],mn_m0(card,mn_sel("UTF8String")),n);
+ if(!ck_same(raw[0..6],"t27p1:") and !ck_same(raw[0..6],"t27m1:")){return false;}
+ var i:usize=0;while(i<65){const a:u32=mn_nibble(raw[6+2*i]);const c:u32=mn_nibble(raw[7+2*i]);if(a>15 or c>15){return false;}public_key[i]=@as(u8,@intCast(a*16+c));i=i+1;}
+ if(!ks_public_valid(public_key[0..65])){return false;}endpoint[0]=0;endpoint[1]=0;if(n==136){return true;}if(raw[136]!=124){return false;}
+ var end:usize=137;while(end<@as(usize,n) and raw[end]!=124){end=end+1;}if(end>=@as(usize,n) or end==137){return false;}
+ const ip:u64=va_ipv4(raw[137..end]);i=end+1;var port:u64=0;if(i>=@as(usize,n)){return false;}
+ while(i<@as(usize,n)){if(raw[i]<48 or raw[i]>57 or port>6553){return false;}port=port*10+@as(u64,raw[i]-48);i=i+1;}
+ if(!mn_endpoint_ok(ip,port)){return false;}endpoint[0]=ip;endpoint[1]=port;return true;
+}
+fn mn_key_card(public_key:[]const u8)->u64 {
+ var out:[136]u8=undefined;mw_copy(out[0..6],"t27p1:");const hex:[]const u8="0123456789abcdef";var i:usize=0;
+ while(i<65){out[6+2*i]=hex[@as(usize,public_key[i]/16)];out[7+2*i]=hex[@as(usize,public_key[i]%16)];i=i+1;}return mn_cf(out[0..136]);
+}
+fn mn_root_idle(b:[]u8)->bool {const root:u64=get_u64(b,M_ROOT);const c:u32=mn_root_state(root,false);const a:u32=mn_root_state(root,true);return (c==0 or c>=5) and (a==0 or a>=5);}
+fn mn_drain_fd(stored:u64)->void {
+ if(stored==0){return;}var i:u32=0;while(i<64){var packet:[4097]u8=undefined;var sa:[16]u8=undefined;var n:[1]u32=undefined;n[0]=16;if(mn_recv(@as(i32,@intCast(stored-1)),packet[0..4097],4097,0,sa[0..16],n)<=0){break;}i=i+1;}
+}
+fn mn_mark_closed(b:[]u8,all:bool,until:u64)->void {
+ var i:usize=0;while(i<8){const at:usize=M_CIRCUITS+i*M_CIRCUIT_ITEM;
+ if(b[at]==4 and (all or (get_u64(b,at+C_LEFT)!=0 and get_u64(b,at+C_RIGHT)!=0))){put_u64(b,at+C_CLOSED,1);if(get_u64(b,at+C_UNTIL)<until){put_u64(b,at+C_UNTIL,until);}}i=i+1;}
+}
+fn mn_close_circuits(b:[]u8,all:bool)->void {mn_mark_closed(b,all,mn_now()+14000);}
+fn mn_epoch(b:[]u8)->bool {
+ var i:usize=0;while(i<4){const at:usize=M_NEIGHBORS+i*M_NEIGHBOR;ck_wipe(b[at+N_READY..at+184]);i=i+1;}
+ mn_drain_fd(get_u64(b,M_NET));
+ if(mn_random(0,16,b[M_EPOCH..M_EPOCH+16])!=0){put_u64(b,M_ACTIVE,0);put_u64(b,M_FORWARD,0);put_u64(b,M_ERROR,1);return false;}return true;
+}
+pub fn mn_open(root:u64,local_port:u64,mesh_port:u64,bind_ip:u64)->u64 {
+ if(root==0 or local_port==0 or local_port>65525 or mesh_port==0 or mesh_port>65535){return 0;}
+ const p:u64=mn_calloc(1,MN_BYTES);if(p==0){return 0;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;
+ put_u64(b,M_ROOT,root);put_u64(b,M_LOCAL,local_port);put_u64(b,M_PORT,mesh_port);put_u64(b,M_TTL,4);
+ const net:i32=mn_udp(bind_ip,mesh_port);if(net<0){mn_close(p);return 0;}put_u64(b,M_NET,@as(u64,@intCast(net+1)));
+ if(!mn_root_public(root,b[M_PUBLIC..M_PUBLIC+65],false) or !mn_proxy_open(b) or !mn_epoch(b)){mn_close(p);return 0;}return p;
+}
+pub fn mn_close(p:u64)->void {
+ if(p==0){return;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;put_u64(b,M_ACTIVE,0);put_u64(b,M_FORWARD,0);
+ var i:usize=0;while(i<3){const stored:u64=get_u64(b,8+i*8);if(stored!=0){mn_close_fd(@as(i32,@intCast(stored-1)));}i=i+1;}ck_wipe(b);mn_free(p);
+}
+pub fn mn_active(p:u64,on:bool)->bool {
+    if(p==0){
+        return false;
+    }
+    const v:MNView=mn_view(p);
+    const b:[]u8=v.bytes;
+    if(!mn_root_idle(b)){
+        return false;
+    }
+    put_u64(b,M_ACTIVE,0);
+    mn_close_local(b);
+    put_u64(b,M_BOUND,0);
+    put_u64(b,M_CIRCUIT_SET,0);
+    put_u64(b,M_SEEN_ACTIVE,0);
+    mn_drain_fd(get_u64(b,M_CHAT));
+    mn_drain_fd(get_u64(b,M_MEDIA));
+    if(get_u64(b,M_FORWARD)==0 and get_u64(b,M_DISCOVERY)==0 and !mn_epoch(b)){
+        return !on;
+    }
+    put_u64(b,M_ACTIVE,if(on) 1 else 0);
+    if(on){
+        var peer:[65]u8=undefined;
+        if(mn_root_public(get_u64(b,M_ROOT),peer[0..65],true)){
+            mw_copy(b[M_FINAL..M_FINAL+65],peer[0..65]);
+            mn_bind_final(b);
+        }
+    }
+    return true;
+}
+pub fn mn_forward(p:u64,on:bool)->bool {
+    if(p==0){
+        return false;
+    }
+    const v:MNView=mn_view(p);
+    const b:[]u8=v.bytes;
+    put_u64(b,M_FORWARD,0);
+    mn_close_circuits(b,false);
+    if(get_u64(b,M_ACTIVE)==0 and !mn_epoch(b)){
+        return !on;
+    }
+    put_u64(b,M_FORWARD,if(on) 1 else 0);
+    return true;
+}
+pub fn mn_neighbor(p:u64,card:u64)->u64 {
+ if(p==0){return 0;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;var key:[65]u8=undefined;var endpoint:[2]u64=undefined;
+ if(mn_m1(card,mn_sel("hasPrefix:"),mn_cf("t27m1:"))%256==0 or !mn_parse(card,key[0..65],endpoint[0..2]) or endpoint[0]==0 or ck_same(key[0..65],b[M_PUBLIC..M_PUBLIC+65])){put_u64(b,M_ERROR,2);return 0;}
+ var check:usize=0;while(check<4){const at:usize=M_NEIGHBORS+check*M_NEIGHBOR;if(b[at]==4 and get_u64(b,at+N_IP)==endpoint[0] and get_u64(b,at+N_PORT)==endpoint[1] and !ck_same(b[at..at+65],key[0..65])){put_u64(b,M_ERROR,2);return 0;}check=check+1;}
+ var slot:u64=0;var i:usize=0;while(i<4){const at:usize=M_NEIGHBORS+i*M_NEIGHBOR;if(ck_same(b[at..at+65],key[0..65])){if(get_u64(b,at+N_IP)==endpoint[0] and get_u64(b,at+N_PORT)==endpoint[1]){return @as(u64,i+1);}slot=@as(u64,i+1);break;}if(b[at]!=4 and slot==0){slot=@as(u64,i+1);}i=i+1;}
+ if(slot==0 or get_u64(b,M_FORWARD)!=0 or !mn_root_idle(b)){put_u64(b,M_ERROR,3);return 0;}
+ mn_close_circuits(b,true);if(!mn_epoch(b)){return 0;}const at:usize=mn_neighbor_at(slot);ck_wipe(b[at..at+M_NEIGHBOR]);mw_copy(b[at..at+65],key[0..65]);put_u64(b,at+N_IP,endpoint[0]);put_u64(b,at+N_PORT,endpoint[1]);put_u64(b,M_ERROR,0);return slot;
+}
+pub fn mn_clear_neighbors(p:u64)->bool {
+ if(p==0){return false;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;if(!mn_root_idle(b)){return false;}
+ put_u64(b,M_FORWARD,0);mn_close_circuits(b,true);ck_wipe(b[M_NEIGHBORS..M_NEIGHBORS+4*M_NEIGHBOR]);ck_wipe(b[M_ROUTES..M_ROUTES+8*M_ROUTE]);put_u64(b,M_CIRCUIT_SET,0);return mn_epoch(b);
+}
+pub fn mn_route_to(p:u64,card:u64,slot:u64)->bool {
+ if(p==0 or slot<1 or slot>4){return false;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;
+ if(get_u64(b,M_FORWARD)!=0 or !mn_root_idle(b) or b[mn_neighbor_at(slot)]!=4){return false;}
+ var key:[65]u8=undefined;var endpoint:[2]u64=undefined;if(!mn_parse(card,key[0..65],endpoint[0..2]) or ck_same(key[0..65],b[M_PUBLIC..M_PUBLIC+65])){return false;}
+ var at:usize=M_ROUTES+8*M_ROUTE;var i:usize=0;while(i<8){const x:usize=M_ROUTES+i*M_ROUTE;if(ck_same(b[x..x+65],key[0..65])){at=x;break;}if(b[x]!=4 and at==M_ROUTES+8*M_ROUTE){at=x;}i=i+1;}
+ if(at>=M_ROUTES+8*M_ROUTE){return false;}mn_close_circuits(b,true);mw_copy(b[at..at+65],key[0..65]);put_u64(b,at+72,slot);put_u64(b,M_CIRCUIT_SET,0);return mn_epoch(b);
+}
+pub fn mn_hops(p:u64,hops:u64)->bool {
+ if(p==0 or hops<1 or hops>4){return false;}const v:MNView=mn_view(p);if(!mn_root_idle(v.bytes) or get_u64(v.bytes,M_FORWARD)!=0){return false;}put_u64(v.bytes,M_TTL,hops);put_u64(v.bytes,M_CIRCUIT_SET,0);return true;
+}
+fn mn_bind_final(b:[]u8)->bool {
+ if(b[M_FINAL]!=4){return false;}if(get_u64(b,M_BOUND)==1){return true;}
+ if(!mn_root_direct(get_u64(b,M_ROOT),2130706433,get_u64(b,M_PROXY))){return false;}put_u64(b,M_BOUND,1);return true;
+}
+pub fn mn_pair(p:u64,card:u64)->bool {
+ if(p==0){return false;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;if(get_u64(b,M_ACTIVE)!=1 or !mn_root_idle(b)){return false;}
+ var key:[65]u8=undefined;var endpoint:[2]u64=undefined;if(!mn_parse(card,key[0..65],endpoint[0..2]) or ck_same(key[0..65],b[M_PUBLIC..M_PUBLIC+65])){return false;}
+ if(!mn_root_pair(get_u64(b,M_ROOT),mn_key_card(key[0..65]),2130706433,get_u64(b,M_PROXY))){return false;}
+ mw_copy(b[M_FINAL..M_FINAL+65],key[0..65]);put_u64(b,M_BOUND,1);put_u64(b,M_CIRCUIT_SET,0);return true;
+}
+fn mn_budget(b:[]u8,now:u64)->bool {
+ const second:u64=now/1000;
+ if(get_u64(b,M_BUDGET_AT)!=second){put_u64(b,M_BUDGET_AT,second);put_u64(b,M_BUDGET,0);}
+ if(get_u64(b,M_BUDGET)>=256){mn_inc(b,M_DROPPED,1);put_u64(b,M_ERROR,4);return false;}
+ mn_inc(b,M_BUDGET,1);return true;
+}
+fn mn_sign(b:[]u8,packet:[]u8,n:usize)->bool {
+ const index:usize=@as(usize,packet[7]);const at:usize=mw_at(index);
+ var canonical:[128]u8=undefined;var signature:[80]u8=undefined;
+ if(!mw_canonical(packet[0..n],index,canonical[0..128])){return false;}
+ const len:u64=mn_root_sign(get_u64(b,M_ROOT),canonical[0..128],128,signature[0..80],80);
+ if(len<8 or len>80){put_u64(b,M_ERROR,5);return false;}
+ packet[at+171]=@as(u8,@intCast(len));mw_copy(packet[at+172..at+172+@as(usize,len)],signature[0..@as(usize,len)]);return true;
+}
+fn mn_next_sequence(b:[]u8)->u64 {mn_inc(b,M_HOP_SEQ,1);return get_u64(b,M_HOP_SEQ);}
+fn mn_send_neighbor(b:[]u8,slot:u64,packet:[]const u8)->bool {
+ if(!mn_protocol_enabled(get_u64(b,M_ACTIVE),get_u64(b,M_FORWARD),get_u64(b,M_DISCOVERY)) or slot<1 or slot>4 or packet.len>MW_MAX){return false;}
+ const at:usize=mn_neighbor_at(slot);if(b[at]!=4){return false;}
+ var sa:[16]u8=undefined;mn_addr(sa[0..16],get_u64(b,at+N_IP),get_u64(b,at+N_PORT));
+ const result:i64=mn_send(@as(i32,@intCast(get_u64(b,M_NET)-1)),packet,@as(u64,packet.len),0,sa[0..16],16);
+ if(result!=@as(i64,@intCast(packet.len))){var err:[4]u8=undefined;mn_peek(err[0..4],mn_errno_ptr(),4);put_u64(b,M_ERRNO,@as(u64,err[0])+@as(u64,err[1])*256);put_u64(b,M_ERROR,6);return false;}
+ mn_inc(b,M_SENT,1);if(@as(u64,packet.len)>get_u64(b,M_LARGEST)){put_u64(b,M_LARGEST,@as(u64,packet.len));}return true;
+}
+fn mn_handshake(b:[]u8,slot:u64,kind:u8,challenge:[]const u8,target_epoch:[]const u8)->bool {
+ const at:usize=mn_neighbor_at(slot);var packet:[MW_MAX]u8=undefined;const seq:u64=mn_next_sequence(b);
+ const n:usize=mw_begin(packet[0..MW_MAX],kind,1,0,seq,mn_now()+8000,challenge,b[M_EPOCH..M_EPOCH+16],b[M_PUBLIC..M_PUBLIC+65],b[at..at+65],packet[0..0]);
+ if(n==0){return false;}packet[12]=@as(u8,@intCast(get_u64(b,M_FORWARD)));
+ if(!mw_proof(packet[0..n],1,b[M_PUBLIC..M_PUBLIC+65],b[at..at+65],b[M_EPOCH..M_EPOCH+16],target_epoch,seq) or !mn_sign(b,packet[0..n],n)){return false;}
+ return mn_send_neighbor(b,slot,packet[0..n]);
+}
+fn mn_hello_tick(b:[]u8,now:u64)->void {
+ var slot:u64=1;
+ while(slot<=4){
+  const at:usize=mn_neighbor_at(slot);
+  if(b[at]==4 and now>=get_u64(b,at+N_NEXT)){
+   put_u64(b,at+N_NEXT,now+1000);
+   if(mn_random(0,16,b[at+N_CHALLENGE..at+N_CHALLENGE+16])==0){
+    put_u64(b,at+N_CHALLENGE_UNTIL,now+5000);var zero:[16]u8=undefined;ck_wipe(zero[0..16]);
+    mn_handshake(b,slot,1,b[at+N_CHALLENGE..at+N_CHALLENGE+16],zero[0..16]);
+   }
+  }
+  slot=slot+1;
+ }
+}
+fn mn_explicit_slot(b:[]u8,final:[]const u8)->u32 {
+ var i:usize=0;while(i<8){const at:usize=M_ROUTES+i*M_ROUTE;if(ck_same(b[at..at+65],final)){return @as(u32,@intCast(get_u64(b,at+72)));}i=i+1;}return 0;
+}
+fn mn_pick(b:[]u8,final:[]const u8,ingress:u64,packet:[]const u8,now:u64)->u64 {
+ var keys:[260]u8=undefined;var eligible:[4]u8=undefined;ck_wipe(keys[0..260]);ck_wipe(eligible[0..4]);
+ var slot:u64=1;
+ while(slot<=4){const at:usize=mn_neighbor_at(slot);const key:[]const u8=b[at..at+65];
+  mw_copy(keys[@as(usize,slot-1)*65..@as(usize,slot-1)*65+65],key);
+  if(b[at]==4 and slot!=ingress and get_u64(b,at+N_READY)>=now and (get_u64(b,at+N_FORWARD)==1 or ck_same(key,final)) and (packet.len==0 or !mw_seen(packet,key))){eligible[@as(usize,slot-1)]=1;}
+  slot=slot+1;
+ }
+ return @as(u64,mw_route(final,keys[0..260],eligible[0..4],mn_explicit_slot(b,final)));
+}
+fn mn_circuit_find(b:[]u8,packet:[]const u8,now:u64)->usize {
+ const direction:u8=packet[9];const left:usize=if(direction==0) MW_ORIGIN else MW_FINAL;const right:usize=if(direction==0) MW_FINAL else MW_ORIGIN;
+ var i:usize=0;
+ while(i<8){const at:usize=M_CIRCUITS+i*M_CIRCUIT_ITEM;
+  if(b[at]==4 and get_u64(b,at+C_UNTIL)>=now and ck_same(b[at..at+65],packet[left..left+65]) and ck_same(b[at+65..at+130],packet[right..right+65]) and ck_same(b[at+C_ID..at+C_ID+16],packet[32..48])){return at;}
+  i=i+1;
+ }
+ return MN_BYTES;
+}
+fn mn_circuit_create(b:[]u8,packet:[]const u8,ingress:u64,next:u64,now:u64)->usize {
+ var i:usize=0;while(i<8){const at:usize=M_CIRCUITS+i*M_CIRCUIT_ITEM;
+  if(b[at]!=4 or get_u64(b,at+C_UNTIL)<now){
+   ck_wipe(b[at..at+M_CIRCUIT_ITEM]);const d:u8=packet[9];const left:usize=if(d==0) MW_ORIGIN else MW_FINAL;const right:usize=if(d==0) MW_FINAL else MW_ORIGIN;
+   mw_copy(b[at..at+65],packet[left..left+65]);mw_copy(b[at+65..at+130],packet[right..right+65]);mw_copy(b[at+C_ID..at+C_ID+16],packet[32..48]);
+   put_u64(b,at+C_LEFT,if(d==0) ingress else next);put_u64(b,at+C_RIGHT,if(d==0) next else ingress);put_u64(b,at+C_UNTIL,get_u64(packet,24)+2000);return at;
+  }i=i+1;
+ }
+ put_u64(b,M_ERROR,7);return MN_BYTES;
+}
+fn mn_origin_ok(b:[]u8,at:usize,packet:[]const u8)->bool {
+ if(at>=MN_BYTES or get_u64(b,at+C_CLOSED)!=0){return false;}
+ const direction:usize=@as(usize,packet[9]);const epoch:usize=at+(if(direction==0) C_EPOCH0 else C_EPOCH1);
+ const mask:u64=get_u64(b,at+C_EPOCH_MASK);
+ if((mask&(@as(u64,1)<<@as(u32,@intCast(direction))))!=0 and !ck_same(b[epoch..epoch+16],packet[48..64])){return false;}
+ const window:usize=at+C_WINDOWS+(direction*2+@as(usize,packet[8]-1))*16;
+ return mw_replay_ok(get_u64(b,window),get_u64(b,window+8),get_u64(packet,16));
+}
+fn mn_origin_commit(b:[]u8,at:usize,packet:[]const u8)->void {
+ const direction:usize=@as(usize,packet[9]);const epoch:usize=at+(if(direction==0) C_EPOCH0 else C_EPOCH1);
+ mw_copy(b[epoch..epoch+16],packet[48..64]);put_u64(b,at+C_EPOCH_MASK,get_u64(b,at+C_EPOCH_MASK)|(@as(u64,1)<<@as(u32,@intCast(direction))));
+ const window:usize=at+C_WINDOWS+(direction*2+@as(usize,packet[8]-1))*16;const seq:u64=get_u64(packet,16);const high:u64=get_u64(b,window);
+ put_u64(b,window+8,mw_replay_mask(high,get_u64(b,window+8),seq));if(seq>high){put_u64(b,window,seq);}
+ const until:u64=get_u64(packet,24)+2000;if(until>get_u64(b,at+C_UNTIL)){put_u64(b,at+C_UNTIL,until);}
+}
+fn mn_new_circuit(b:[]u8)->bool {
+ if(mn_random(0,16,b[M_CIRCUIT..M_CIRCUIT+16])!=0 or mn_random(0,16,b[M_ORIGIN_EPOCH..M_ORIGIN_EPOCH+16])!=0){put_u64(b,M_ERROR,1);return false;}
+ put_u64(b,M_CIRCUIT_SET,1);put_u64(b,M_SEEN_ACTIVE,0);return true;
+}
+fn mn_adopt_circuit(b:[]u8,packet:[]const u8,body:[]const u8)->bool {
+ if(get_u64(b,M_CIRCUIT_SET)==1 and ck_same(b[M_CIRCUIT..M_CIRCUIT+16],packet[32..48])){return true;}
+ if(!mn_root_idle(b) or ck_hdr_type(body)!=CK_T_INVITE){return false;}
+ if(!mn_new_circuit(b)){return false;}mw_copy(b[M_CIRCUIT..M_CIRCUIT+16],packet[32..48]);return true;
+}
+fn mn_own_send(b:[]u8,channel:u8,body:[]const u8)->bool {
+ if(get_u64(b,M_ACTIVE)!=1 or b[M_FINAL]!=4 or body.len<52 or body.len>MW_BODY){mn_inc(b,M_OVERSIZE,1);return false;}
+ // Only explicit dialing or a verified incoming INVITE establishes a circuit.
+ // Late core BYE/retry callbacks after End must never allocate a replacement.
+ if(get_u64(b,M_CIRCUIT_SET)!=1){mn_inc(b,M_DROPPED,1);return false;}
+ const now:u64=mn_now();if(!mn_budget(b,now)){return false;}
+ mn_inc(b,M_ORIGIN_SEQ,1);var packet:[MW_MAX]u8=undefined;
+ const n:usize=mw_begin(packet[0..MW_MAX],3,@as(u8,@intCast(get_u64(b,M_TTL))),channel,get_u64(b,M_ORIGIN_SEQ),now+8000,b[M_CIRCUIT..M_CIRCUIT+16],b[M_ORIGIN_EPOCH..M_ORIGIN_EPOCH+16],b[M_PUBLIC..M_PUBLIC+65],b[M_FINAL..M_FINAL+65],body);
+ if(n==0){return false;}
+ var room:usize=mn_circuit_find(b,packet[0..n],now);var next:u64=0;
+ if(room<MN_BYTES){if(get_u64(b,room+C_CLOSED)!=0){mn_inc(b,M_REPLAY,1);return false;}next=get_u64(b,room+(if(packet[9]==0) C_RIGHT else C_LEFT));}
+ else{next=mn_pick(b,b[M_FINAL..M_FINAL+65],0,packet[0..0],now);if(next!=0){room=mn_circuit_create(b,packet[0..n],0,next,now);}}
+ if(room>=MN_BYTES){put_u64(b,M_ROUTE_REASON,4);mn_inc(b,M_NO_ROUTE,1);return false;}
+ if(next<1 or next>4){put_u64(b,M_ROUTE_REASON,4);mn_inc(b,M_NO_ROUTE,1);put_u64(b,M_ERROR,8);return false;}
+ const at:usize=mn_neighbor_at(next);if(get_u64(b,at+N_READY)<now){mn_inc(b,M_NO_ROUTE,1);return false;}
+ const seq:u64=mn_next_sequence(b);
+ if(!mw_proof(packet[0..n],1,b[M_PUBLIC..M_PUBLIC+65],b[at..at+65],b[M_EPOCH..M_EPOCH+16],b[at+N_EPOCH..at+N_EPOCH+16],seq) or !mn_sign(b,packet[0..n],n)){return false;}
+ if(!mn_send_neighbor(b,next,packet[0..n])){return false;}mn_origin_commit(b,room,packet[0..n]);return true;
+}
+fn mn_flush_local(b:[]u8)->void {
+ var channel:u8=1;
+ while(channel<=2){const stored:u64=get_u64(b,if(channel==1) M_CHAT else M_MEDIA);var count:u32=0;
+  while(stored!=0 and count<16){var packet:[2049]u8=undefined;var from:[16]u8=undefined;var size:[1]u32=undefined;size[0]=16;
+   const n:i64=mn_recv(@as(i32,@intCast(stored-1)),packet[0..2049],2049,0,from[0..16],size);if(n<=0){break;}
+   if(n<=2048 and n>=52 and size[0]==16 and from[1]==2 and mn_source_ip(from[0..16])==2130706433 and mn_source_port(from[0..16])==get_u64(b,M_LOCAL)+(if(channel==2) @as(u64,10) else @as(u64,0))){mn_own_send(b,channel,packet[0..@as(usize,@intCast(n))]);}
+   else{mn_inc(b,M_DROPPED,1);if(n>2048){mn_inc(b,M_OVERSIZE,1);}}count=count+1;
+  }channel=channel+1;
+ }
+}
+fn mn_end_mark(b:[]u8,until:u64)->void {
+ var i:usize=0;while(i<8){const at:usize=M_CIRCUITS+i*M_CIRCUIT_ITEM;
+  const own:bool=ck_same(b[at..at+65],b[M_PUBLIC..M_PUBLIC+65]) or ck_same(b[at+65..at+130],b[M_PUBLIC..M_PUBLIC+65]);
+  if(b[at]==4 and own and ck_same(b[at+C_ID..at+C_ID+16],b[M_CIRCUIT..M_CIRCUIT+16])){
+   put_u64(b,at+C_CLOSED,1);if(get_u64(b,at+C_UNTIL)<until){put_u64(b,at+C_UNTIL,until);}
+  }
+  i=i+1;
+ }
+ put_u64(b,M_CIRCUIT_SET,0);put_u64(b,M_SEEN_ACTIVE,0);
+}
+pub fn mn_end(p:u64)->void {
+ if(p==0){return;}const v:MNView=mn_view(p);mn_flush_local(v.bytes);mn_end_mark(v.bytes,mn_now()+14000);
+}
+pub fn mn_connect(p:u64,audio:bool)->bool {
+ if(p==0){return false;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;
+ if(get_u64(b,M_ACTIVE)!=1 or !mn_bind_final(b)){put_u64(b,M_ERROR,9);return false;}
+ if(mn_pick(b,b[M_FINAL..M_FINAL+65],0,b[0..0],mn_now())==0){put_u64(b,M_ERROR,8);return false;}
+ if(mn_root_idle(b)){put_u64(b,M_CIRCUIT_SET,0);if(!mn_new_circuit(b)){return false;}}
+ put_u64(b,M_ERROR,0);return mn_root_connect(get_u64(b,M_ROOT),audio);
+}
+fn mn_neighbor_source(b:[]u8,sa:[]const u8)->u64 {
+ if(sa.len!=16 or sa[0]!=16 or sa[1]!=2){return 0;}
+ const ip:u64=mn_source_ip(sa);const port:u64=mn_source_port(sa);var slot:u64=1;
+ while(slot<=4){const at:usize=mn_neighbor_at(slot);if(b[at]==4 and get_u64(b,at+N_IP)==ip and get_u64(b,at+N_PORT)==port){return slot;}slot=slot+1;}return 0;
+}
+fn mn_hello_budget(b:[]u8,at:usize,now:u64)->bool {
+ const second:u64=now/1000;
+ if(get_u64(b,at+N_HELLO_AT)!=second){put_u64(b,at+N_HELLO_AT,second);put_u64(b,at+N_HELLO_COUNT,0);}
+ if(get_u64(b,at+N_HELLO_COUNT)>=8){return false;}mn_inc(b,at+N_HELLO_COUNT,1);return true;
+}
+fn mn_accept_handshake(b:[]u8,slot:u64,packet:[]const u8,now:u64)->void {
+ const at:usize=mn_neighbor_at(slot);const proof:usize=MW_BASE;
+ if(!mn_hello_budget(b,at,now) or !ck_same(packet[48..64],packet[proof+130..proof+146])){mn_inc(b,M_DROPPED,1);return;}
+ if(packet[5]==1){
+  var zero:[16]u8=undefined;ck_wipe(zero[0..16]);
+  if(!ck_same(packet[proof+146..proof+162],zero[0..16])){mn_inc(b,M_BAD_EPOCH,1);return;}
+ }else{
+  if(get_u64(b,at+N_CHALLENGE_UNTIL)<now or get_u64(b,at+N_CHALLENGE_UNTIL)==0 or !ck_same(packet[32..48],b[at+N_CHALLENGE..at+N_CHALLENGE+16]) or !ck_same(packet[proof+146..proof+162],b[M_EPOCH..M_EPOCH+16])){
+   mn_inc(b,M_BAD_EPOCH,1);return;
+  }
+ }
+ if(!mw_verify(packet,b[M_PUBLIC..M_PUBLIC+65],now)){mn_inc(b,M_SIGNATURE,1);return;}
+ if(packet[5]==1){
+  // An old HELLO may elicit one rate-bounded ACK but can never change admission or replay state.
+  mn_handshake(b,slot,2,packet[32..48],packet[proof+130..proof+146]);return;
+ }
+ if(!ck_same(b[at+N_EPOCH..at+N_EPOCH+16],packet[proof+130..proof+146])){put_u64(b,at+N_HIGH,0);put_u64(b,at+N_MASK,0);}
+ mw_copy(b[at+N_EPOCH..at+N_EPOCH+16],packet[proof+130..proof+146]);
+ put_u64(b,at+N_READY,now+5000);put_u64(b,at+N_FORWARD,@as(u64,packet[12]));
+ put_u64(b,at+N_CHALLENGE_UNTIL,0);ck_wipe(b[at+N_CHALLENGE..at+N_CHALLENGE+16]);
+}
+fn mn_can_deliver(b:[]u8,packet:[]const u8,body:[]const u8)->bool {
+ if(get_u64(b,M_BOUND)!=1 or !ck_same(packet[MW_ORIGIN..MW_ORIGIN+65],b[M_FINAL..M_FINAL+65])){return false;}
+ var peer:[65]u8=undefined;
+ if(!mn_root_public(get_u64(b,M_ROOT),peer[0..65],true) or !ck_same(peer[0..65],packet[MW_ORIGIN..MW_ORIGIN+65])){return false;}
+ if(get_u64(b,M_CIRCUIT_SET)==1 and ck_same(b[M_CIRCUIT..M_CIRCUIT+16],packet[32..48])){return true;}
+ return mn_root_idle(b) and ck_hdr_type(body)==CK_T_INVITE;
+}
+fn mn_accept_data(b:[]u8,slot:u64,packet:[]u8,n:usize,now:u64)->void {
+    const neighbor:usize=mn_neighbor_at(slot);
+    const last:usize=mw_at(@as(usize,packet[7]));
+    if(get_u64(b,neighbor+N_READY)<now or !ck_same(packet[last+146..last+162],b[M_EPOCH..M_EPOCH+16]) or !ck_same(packet[last+130..last+146],b[neighbor+N_EPOCH..neighbor+N_EPOCH+16])){
+        mn_inc(b,M_BAD_EPOCH,1);
+        return;
+    }
+    const hop_seq:u64=get_u64(packet,last+162);
+    if(!mw_replay_ok(get_u64(b,neighbor+N_HIGH),get_u64(b,neighbor+N_MASK),hop_seq)){
+        mn_inc(b,M_REPLAY,1);
+        return;
+    }
+    if(!mn_budget(b,now)){
+        return;
+    }
+    if(!mw_verify(packet[0..n],b[M_PUBLIC..M_PUBLIC+65],now)){
+        mn_inc(b,M_SIGNATURE,1);
+        return;
+    }
+    const payload:usize=mw_payload_at(packet[0..n]);
+    const local:bool=ck_same(packet[MW_FINAL..MW_FINAL+65],b[M_PUBLIC..M_PUBLIC+65]);
+    const adopting:bool=local and get_u64(b,M_BOUND)==0 and mn_auto_candidate(b,packet[0..n],packet[payload..n]);
+    if(local){
+        if(!adopting and !mn_can_deliver(b,packet[0..n],packet[payload..n])){
+            put_u64(b,M_ROUTE_REASON,1);
+            mn_inc(b,M_NO_ROUTE,1);
+            return;
+        }
+    }
+    else{
+        if(get_u64(b,M_FORWARD)!=1){
+            mn_inc(b,M_DROPPED,1);
+            return;
+        }
+        if(packet[7]>=packet[6]){
+            mn_inc(b,M_EXPIRED,1);
+            put_u64(b,M_ERROR,10);
+            return;
+        }
+    }
+    var room:usize=mn_circuit_find(b,packet[0..n],now);
+    var next:u64=0;
+    if(room<MN_BYTES){
+        const ingress:u64=get_u64(b,room+(if(packet[9]==0) C_LEFT else C_RIGHT));
+        if(get_u64(b,room+C_CLOSED)!=0 or ingress!=slot){
+            mn_inc(b,M_REPLAY,1);
+            return;
+        }
+        next=get_u64(b,room+(if(packet[9]==0) C_RIGHT else C_LEFT));
+        if((local and next!=0) or (!local and (next==0 or next==slot))){
+            put_u64(b,M_ROUTE_REASON,2);
+            mn_inc(b,M_NO_ROUTE,1);
+            return;
+        }
+    }
+    else{
+        if(!local){
+            next=mn_pick(b,packet[MW_FINAL..MW_FINAL+65],slot,packet[0..n],now);
+            if(next==0){
+                put_u64(b,M_ROUTE_REASON,3);
+                mn_inc(b,M_NO_ROUTE,1);
+                put_u64(b,M_ERROR,8);
+                return;
+            }
+        }
+        room=mn_circuit_create(b,packet[0..n],slot,next,now);
+    }
+    if(room>=MN_BYTES or !mn_origin_ok(b,room,packet[0..n])){
+        mn_inc(b,M_REPLAY,1);
+        return;
+    }
+    var sent:bool=false;
+    if(local){
+        if(adopting and !mn_auto_bind(b,packet[0..n],packet[payload..n])){
+            return;
+        }
+        if(!mn_adopt_circuit(b,packet[0..n],packet[payload..n])){
+            if(adopting){
+                mn_auto_fail(b);
+            }
+            mn_inc(b,M_REPLAY,1);
+            return;
+        }
+        const channel:u8=packet[8];
+        const fd:u64=get_u64(b,if(channel==1) M_CHAT else M_MEDIA);
+        var sa:[16]u8=undefined;
+        mn_addr(sa[0..16],2130706433,get_u64(b,M_LOCAL)+(if(channel==2) @as(u64,10) else @as(u64,0)));
+        sent=mn_send(@as(i32,@intCast(fd-1)),packet[payload..n],@as(u64,n-payload),0,sa[0..16],16)==@as(i64,@intCast(n-payload));
+        if(sent){
+            mn_inc(b,M_DELIVERED,1);
+            mn_inc(b,M_DELIVER_BYTES,@as(u64,n-payload));
+        }
+    }
+    else{
+        const at:usize=mn_neighbor_at(next);
+        if(get_u64(b,at+N_READY)<now){
+            mn_inc(b,M_NO_ROUTE,1);
+            return;
+        }
+        const size:usize=mw_append(packet,n,b[M_PUBLIC..M_PUBLIC+65],b[at..at+65],b[M_EPOCH..M_EPOCH+16],b[at+N_EPOCH..at+N_EPOCH+16],mn_next_sequence(b));
+        if(size==0 or !mn_sign(b,packet[0..size],size)){
+            mn_inc(b,M_DROPPED,1);
+            return;
+        }
+        sent=mn_send_neighbor(b,next,packet[0..size]);
+        if(sent){
+            mn_inc(b,M_FORWARDED,1);
+            mn_inc(b,M_FORWARD_BYTES,@as(u64,n-payload));
+        }
+    }
+    if(!sent){
+        if(adopting){
+            mn_auto_fail(b);
+        }
+        mn_inc(b,M_DROPPED,1);
+        return;
+    }
+    if(adopting){
+        put_u64(b,M_AUTO_RESULT,1);
+    }
+    // Advance only after all authenticated fields, circuit direction and full datagram transfer passed.
+    const high:u64=get_u64(b,neighbor+N_HIGH);
+    put_u64(b,neighbor+N_MASK,mw_replay_mask(high,get_u64(b,neighbor+N_MASK),hop_seq));
+    if(hop_seq>high){
+        put_u64(b,neighbor+N_HIGH,hop_seq);
+    }
+    mn_origin_commit(b,room,packet[0..n]);
+    mn_inc(b,M_RECEIVED,1);
+    put_u64(b,M_ERROR,0);
+    if(@as(u64,n)>get_u64(b,M_LARGEST)){
+        put_u64(b,M_LARGEST,@as(u64,n));
+    }
+}
+fn mn_receive(b:[]u8)->void {
+ var count:u32=0;
+ while(count<32){
+  var packet:[4097]u8=undefined;var sa:[16]u8=undefined;var length:[1]u32=undefined;length[0]=16;
+  const n:i64=mn_recv(@as(i32,@intCast(get_u64(b,M_NET)-1)),packet[0..4097],4097,0,sa[0..16],length);
+  if(n<=0){break;}count=count+1;
+  if(n>@as(i64,MW_MAX)){mn_inc(b,M_OVERSIZE,1);continue;}
+  if(length[0]!=16){mn_inc(b,M_DROPPED,1);continue;}
+  const slot:u64=mn_neighbor_source(b,sa[0..16]);if(slot==0){mn_inc(b,M_SIGNATURE,1);continue;}
+  const size:usize=@as(usize,@intCast(n));const now:u64=mn_now();
+  if(!mw_shape(packet[0..size],now)){mn_inc(b,M_EXPIRED,1);continue;}
+  const at:usize=mn_neighbor_at(slot);const last:usize=mw_at(@as(usize,packet[7]));
+  if(!ck_same(packet[last..last+65],b[at..at+65]) or !ck_same(packet[last+65..last+130],b[M_PUBLIC..M_PUBLIC+65])){mn_inc(b,M_SIGNATURE,1);continue;}
+  if(packet[5]==3){mn_accept_data(b,slot,packet[0..MW_MAX],size,now);}
+  else{mn_accept_handshake(b,slot,packet[0..size],now);}
+ }
+}
+pub fn mn_tick(p:u64)->void {
+    if(p==0){
+        return;
+    }
+    const v:MNView=mn_view(p);
+    const b:[]u8=v.bytes;
+    if(!mn_protocol_enabled(get_u64(b,M_ACTIVE),get_u64(b,M_FORWARD),get_u64(b,M_DISCOVERY))){
+        mn_drain_fd(get_u64(b,M_NET));
+        mn_drain_fd(get_u64(b,M_CHAT));
+        mn_drain_fd(get_u64(b,M_MEDIA));
+        return;
+    }
+    const now:u64=mn_now();
+    if(get_u64(b,M_ACTIVE)==1 and mn_observe_lifecycle(b,mn_root_idle(b))){
+        mn_flush_local(b);
+        mn_end_mark(b,now+14000);
+    }
+    mn_receive(b);
+    mn_hello_tick(b,now);
+    mn_flush_local(b);
+}
+pub fn mn_stat(p:u64,k:u32)->u64 {
+ if(p==0){return 0;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;
+ if(k==27){return get_u64(b,M_AUTO_RESULT);}
+ if(k==24){return get_u64(b,M_CIRCUIT_SET);}if(k==25){return get_u64(b,M_SEEN_ACTIVE);}if(k==26){return get_u64(b,M_ROUTE_REASON);}
+ if(k==0){return get_u64(b,M_ACTIVE);}if(k==1){return get_u64(b,M_FORWARD);}
+ if(k==2 or k==3){var count:u64=0;var i:usize=0;const now:u64=mn_now();while(i<4){const at:usize=M_NEIGHBORS+i*M_NEIGHBOR;if(b[at]==4 and (k==2 or get_u64(b,at+N_READY)>=now)){count=count+1;}i=i+1;}return count;}
+ if(k==4){return get_u64(b,M_FORWARDED);}if(k==5){return get_u64(b,M_DELIVERED);}if(k==6){return get_u64(b,M_DROPPED);}
+ if(k==7){return get_u64(b,M_SIGNATURE);}if(k==8){return get_u64(b,M_BAD_EPOCH);}if(k==9){return get_u64(b,M_REPLAY);}
+ if(k==10){return get_u64(b,M_EXPIRED);}if(k==11){return get_u64(b,M_NO_ROUTE);}if(k==12){return get_u64(b,M_LARGEST);}
+ if(k==13){return get_u64(b,M_ERRNO);}if(k==14){return get_u64(b,M_PORT);}if(k==15){return get_u64(b,M_PROXY);}
+ if(k==16){var count:u64=0;var i:usize=0;const now:u64=mn_now();while(i<8){const at:usize=M_CIRCUITS+i*M_CIRCUIT_ITEM;if(b[at]==4 and get_u64(b,at+C_CLOSED)==0 and get_u64(b,at+C_UNTIL)>=now and get_u64(b,at+C_LEFT)!=0 and get_u64(b,at+C_RIGHT)!=0){count=count+1;}i=i+1;}return count;}
+ if(k==17){return get_u64(b,M_ERROR);}if(k==18){return get_u64(b,M_OVERSIZE);}if(k==19){return get_u64(b,M_FORWARD_BYTES);}if(k==20){return get_u64(b,M_DELIVER_BYTES);}if(k==21){return get_u64(b,M_BOUND);}if(k==22){return get_u64(b,M_TTL);}
+ if(k>=32 and k<36){const at:usize=mn_neighbor_at(@as(u64,k-31));return if(b[at]==4 and get_u64(b,at+N_READY)>=mn_now()) (if(get_u64(b,at+N_FORWARD)==1) @as(u64,2) else @as(u64,1)) else 0;}
+ return 0;
+}
+pub fn mn_status(p:u64)->u64 {
+ if(p==0){return mn_cf("Mesh engine unavailable. Direct and Internet remain separate.");}
+ const v:MNView=mn_view(p);const b:[]u8=v.bytes;
+ if(!mn_protocol_enabled(get_u64(b,M_ACTIVE),get_u64(b,M_FORWARD),get_u64(b,M_DISCOVERY))){return mn_cf("Mesh stopped; no device forwarding.");}
+ if(get_u64(b,M_ACTIVE)==0 and get_u64(b,M_FORWARD)==0){return mn_cf("Trusted-neighbor discovery only; forwarding OFF and no local Mesh endpoint.");}
+ if(get_u64(b,M_ERROR)==8){return mn_cf("Mesh route unavailable. Add mutually trusted neighbors; intermediaries must allow forwarding. Ambiguous branches need an explicit route.");}
+ if(get_u64(b,M_ERROR)==7){return mn_cf("Mesh circuit limit reached. Wait fourteen seconds or end a session.");}
+ if(get_u64(b,M_ERROR)==10){return mn_cf("Mesh hop limit reached; no direct/Internet fallback.");}
+ if(get_u64(b,M_FORWARD)==1){return mn_cf("Mesh helper running for trusted neighbors while T27 OS is open. Your selected route is independent. Neighbor edits require forwarding OFF.");}
+ return mn_cf("Mesh forwarding OFF. You can still be a final endpoint. Add trusted Mesh neighbor cards, pair the actual recipient, then compare codes. Keep People open.");
+}
+test mesh_context_regions_bounds_and_null_entry_fail_closed {
+ assert M_NEIGHBORS+4*M_NEIGHBOR<=M_ROUTES;assert M_ROUTES+8*M_ROUTE<=M_CIRCUITS;
+ assert M_CIRCUITS+8*M_CIRCUIT_ITEM<=MN_BYTES;assert C_WINDOWS+4*16<M_CIRCUIT_ITEM;
+ assert mn_open(0,49901,49921,0)==0;assert !mn_active(0,true);assert !mn_forward(0,true);
+ assert mn_neighbor(0,0)==0;assert !mn_pair(0,0);assert !mn_connect(0,false);assert !mn_route_to(0,0,1);assert !mn_hops(0,4);
+ assert mn_endpoint_ok(2130706433,51321);assert !mn_endpoint_ok(0,1);assert !mn_endpoint_ok(2852039166,80);assert !mn_endpoint_ok(3758096384,1);
+}
+test off_keeps_unexpired_transit_tombstones_and_never_clears_origin_windows {
+ var b:[MN_BYTES]u8=undefined;ck_wipe(b[0..MN_BYTES]);const at:usize=M_CIRCUITS;b[at]=4;
+ put_u64(b[0..MN_BYTES],at+C_LEFT,1);put_u64(b[0..MN_BYTES],at+C_RIGHT,2);put_u64(b[0..MN_BYTES],at+C_WINDOWS,99);put_u64(b[0..MN_BYTES],at+C_WINDOWS+8,1);
+ // Time is supplied by the native adapter; pure closure marker decisions remain independently bounded.
+ mn_mark_closed(b[0..MN_BYTES],false,14000);assert get_u64(b[0..MN_BYTES],at+C_CLOSED)==1;assert get_u64(b[0..MN_BYTES],at+C_UNTIL)==14000;assert get_u64(b[0..MN_BYTES],at+C_WINDOWS)==99;assert get_u64(b[0..MN_BYTES],at+C_WINDOWS+8)==1;
+}
+
+pub fn mn_public_card(card:u64)->u64 {var key:[65]u8=undefined;var endpoint:[2]u64=undefined;if(!mn_parse(card,key[0..65],endpoint[0..2])){return 0;}return mn_key_card(key[0..65]);}
+fn mn_decimal(out:[]u8,value:u64)->usize {
+ var rev:[20]u8=undefined;var n:usize=0;var v:u64=value;
+ while(n<20){rev[n]=@as(u8,@intCast(v%10))+48;n=n+1;v=v/10;if(v==0){break;}}
+ if(n>out.len){return 0;}var i:usize=0;while(i<n){out[i]=rev[n-1-i];i=i+1;}return n;
+}
+pub fn mn_card(p:u64,ip:u64)->u64 {
+ if(p==0 or !mn_endpoint_ok(ip,1)){return 0;}const v:MNView=mn_view(p);const b:[]u8=v.bytes;
+ var out:[200]u8=undefined;mw_copy(out[0..6],"t27m1:");const hex:[]const u8="0123456789abcdef";var i:usize=0;
+ while(i<65){out[6+2*i]=hex[@as(usize,b[M_PUBLIC+i]/16)];out[7+2*i]=hex[@as(usize,b[M_PUBLIC+i]%16)];i=i+1;}
+ var at:usize=136;out[at]=124;at=at+1;i=0;
+ while(i<4){if(i>0){out[at]=46;at=at+1;}const octet:u64=(ip>>@as(u32,@intCast((3-i)*8)))&255;at=at+mn_decimal(out[at..200],octet);i=i+1;}
+ out[at]=124;at=at+1;at=at+mn_decimal(out[at..200],get_u64(b,M_PORT));return mn_cf(out[0..at]);
+}
+pub fn mn_neighbors_text(p:u64)->u64 {
+ if(p==0){return mn_cf("Mesh unavailable.");}const v:MNView=mn_view(p);const b:[]u8=v.bytes;
+ var text:[512]u8=undefined;const header:[]const u8="Trusted Mesh neighbors (full card keys are pinned):\n";mw_copy(text[0..header.len],header);var pos:usize=header.len;const hex:[]const u8="0123456789abcdef";
+ var slot:u64=1;while(slot<=4){const at:usize=mn_neighbor_at(slot);if(b[at]==4){text[pos]=@as(u8,@intCast(slot))+48;text[pos+1]=58;text[pos+2]=32;pos=pos+3;var i:usize=61;
+  while(i<65){text[pos]=hex[@as(usize,b[at+i]/16)];text[pos+1]=hex[@as(usize,b[at+i]%16)];pos=pos+2;i=i+1;}
+  const label:[]const u8=if(get_u64(b,at+N_READY)<mn_now()) " waiting for peer proof\n" else if(get_u64(b,at+N_FORWARD)==1) " ready; forwarding ON\n" else " ready; endpoint only\n";
+  mw_copy(text[pos..pos+label.len],label);pos=pos+label.len;
+ }slot=slot+1;}
+ if(pos==header.len){const none:[]const u8="None. Add the device's Mesh card, and let it add yours.";mw_copy(text[pos..pos+none.len],none);pos=pos+none.len;}
+ return mn_cf(text[0..pos]);
+}
+
+test local_end_tombstones_own_circuit_and_preserves_independent_transit {
+ var b:[MN_BYTES]u8=undefined;ck_wipe(b[0..MN_BYTES]);b[M_PUBLIC]=4;b[M_PUBLIC+1]=1;b[M_CIRCUIT]=7;put_u64(b[0..MN_BYTES],M_CIRCUIT_SET,1);
+ const own:usize=M_CIRCUITS;const transit:usize=own+M_CIRCUIT_ITEM;
+ b[own]=4;b[own+1]=1;b[own+C_ID]=7;put_u64(b[0..MN_BYTES],own+C_WINDOWS,99);
+ b[transit]=4;b[transit+1]=2;b[transit+65]=4;b[transit+66]=3;b[transit+C_ID]=7;put_u64(b[0..MN_BYTES],transit+C_LEFT,1);put_u64(b[0..MN_BYTES],transit+C_RIGHT,2);
+ mn_end_mark(b[0..MN_BYTES],14000);assert get_u64(b[0..MN_BYTES],M_CIRCUIT_SET)==0;
+ assert get_u64(b[0..MN_BYTES],own+C_CLOSED)==1;assert get_u64(b[0..MN_BYTES],own+C_UNTIL)==14000;assert get_u64(b[0..MN_BYTES],own+C_WINDOWS)==99;
+ assert get_u64(b[0..MN_BYTES],transit+C_CLOSED)==0;
+}
+
+// Public recipient readback supports exact-key confirmation; no private material is exposed.
+pub fn mn_recipient(p:u64)->u64 {
+ if(p==0){return 0;}const v:MNView=mn_view(p);if(v.bytes[M_FINAL]!=4){return 0;}return mn_key_card(v.bytes[M_FINAL..M_FINAL+65]);
+}
+
+test late_core_payload_after_end_cannot_create_or_replace_a_circuit {
+ var b:[MN_BYTES]u8=undefined;ck_wipe(b[0..MN_BYTES]);var body:[52]u8=undefined;ck_wipe(body[0..52]);
+ put_u64(b[0..MN_BYTES],M_ACTIVE,1);b[M_FINAL]=4;b[M_CIRCUIT]=7;
+ assert !mn_own_send(b[0..MN_BYTES],1,body[0..52]);
+ assert get_u64(b[0..MN_BYTES],M_CIRCUIT_SET)==0;assert b[M_CIRCUIT]==7;assert get_u64(b[0..MN_BYTES],M_DROPPED)==1;
+}
+
+fn mn_observe_lifecycle(b:[]u8,idle:bool)->bool {
+ if(!idle){put_u64(b,M_SEEN_ACTIVE,1);}
+ return get_u64(b,M_CIRCUIT_SET)==1 and get_u64(b,M_SEEN_ACTIVE)==1 and idle;
+}
+test pending_incoming_adoption_waits_for_core_progress_before_idle_close {
+ var b:[MN_BYTES]u8=undefined;ck_wipe(b[0..MN_BYTES]);put_u64(b[0..MN_BYTES],M_CIRCUIT_SET,1);
+ assert !mn_observe_lifecycle(b[0..MN_BYTES],true);assert get_u64(b[0..MN_BYTES],M_CIRCUIT_SET)==1;
+ assert !mn_observe_lifecycle(b[0..MN_BYTES],false);assert get_u64(b[0..MN_BYTES],M_SEEN_ACTIVE)==1;
+ assert mn_observe_lifecycle(b[0..MN_BYTES],true);
+ put_u64(b[0..MN_BYTES],M_CIRCUIT_SET,0);assert !mn_observe_lifecycle(b[0..MN_BYTES],true);
+}
+
+pub fn mn_service_enabled(local:u64,forward:u64)->bool{
+    return local==1 or forward==1;
+}
+fn mn_close_local(b:[]u8)->void {
+    mn_close_local_at(b,mn_now()+14000);
+}
+fn mn_close_local_at(b:[]u8,until:u64)->void {
+    var i:usize=0;
+    while(i<8){
+        const at:usize=M_CIRCUITS+i*M_CIRCUIT_ITEM;
+        if(b[at]==4 and (get_u64(b,at+C_LEFT)==0 or get_u64(b,at+C_RIGHT)==0)){
+            put_u64(b,at+C_CLOSED,1);
+            put_u64(b,at+C_UNTIL,until);
+        }
+        i=i+1;
+    }
+}
+test helper_service_does_not_require_a_local_mesh_endpoint {
+    assert mn_service_enabled(0,1);
+    assert mn_service_enabled(1,0);
+    assert mn_service_enabled(1,1);
+    assert !mn_service_enabled(0,0);
+}
+test changing_local_route_preserves_transit_circuits {
+    var b:[MN_BYTES]u8=undefined;
+    ck_wipe(b[0..MN_BYTES]);
+    const local:usize=M_CIRCUITS;
+    const transit:usize=M_CIRCUITS+M_CIRCUIT_ITEM;
+    b[local]=4;
+    b[transit]=4;
+    put_u64(b[0..MN_BYTES],local+C_LEFT,0);
+    put_u64(b[0..MN_BYTES],local+C_RIGHT,2);
+    put_u64(b[0..MN_BYTES],transit+C_LEFT,1);
+    put_u64(b[0..MN_BYTES],transit+C_RIGHT,2);
+    mn_close_local_at(b[0..MN_BYTES],77);
+    assert get_u64(b[0..MN_BYTES],local+C_CLOSED)==1;
+    assert get_u64(b[0..MN_BYTES],local+C_UNTIL)==77;
+    assert get_u64(b[0..MN_BYTES],transit+C_CLOSED)==0;
+}
+// Discovery authenticates saved neighbors only; it grants neither forwarding nor local delivery.
+pub fn mn_discover(p:u64,on:bool)->void {
+    if(p==0){
+        return;
+    }
+    const v:MNView=mn_view(p);
+    put_u64(v.bytes,M_DISCOVERY,if(on) 1 else 0);
+}
+pub fn mn_protocol_enabled(local:u64,forward:u64,discovery:u64)->bool{
+    return mn_service_enabled(local,forward) or discovery==1;
+}
+test trusted_discovery_is_not_forwarding_or_an_endpoint {
+    assert mn_protocol_enabled(0,0,1);
+    assert !mn_service_enabled(0,0);
+    assert M_SEEN_ACTIVE+8<=M_DISCOVERY;
+    assert M_DISCOVERY+8<=M_NEIGHBORS;
+}
+test discovery_cannot_deliver_into_a_direct_session {
+    var b:[MN_BYTES]u8=undefined;
+    ck_wipe(b[0..MN_BYTES]);
+    put_u64(b[0..MN_BYTES],M_DISCOVERY,1);
+    var packet:[256]u8=undefined;
+    ck_wipe(packet[0..256]);
+    assert !mn_can_deliver(b[0..MN_BYTES],packet[0..256],packet[0..52]);
+    assert get_u64(b[0..MN_BYTES],M_BOUND)==0;
+    assert get_u64(b[0..MN_BYTES],M_FORWARD)==0;
+}
+// Auto receive authorization is explicit UI policy, separate from neighbor discovery and forwarding.
+pub fn mn_auto_receive(p:u64,allowed:bool,directory:u64)->void {
+    if(p==0){
+        return;
+    }
+    const v:MNView=mn_view(p);
+    put_u64(v.bytes,M_AUTO_RECEIVE,if(allowed) 1 else 0);
+    put_u64(v.bytes,M_AUTO_DIRECTORY,directory);
+}
+fn mn_directory_active(p:u64,on:bool)->bool{
+    return @extern("dn_route_active");
+}
+pub fn mn_auto_policy(allowed:u64,local:u64,idle:bool,channel:u8,origin:bool,invite:bool)->bool {
+    return allowed==1 and local==0 and idle and (channel==1 or channel==2) and origin and invite;
+}
+fn mn_auto_candidate(b:[]u8,packet:[]const u8,body:[]const u8)->bool {
+    if(get_u64(b,M_AUTO_RECEIVE)!=1 or get_u64(b,M_ACTIVE)!=0 or !mn_root_idle(b) or body.len!=CK_INVITE_LEN or ck_hdr_type(body)!=CK_T_INVITE){
+        return false;
+    }
+    var peer:[65]u8=undefined;
+    var own_fp:[10]u8=undefined;
+    var peer_fp:[10]u8=undefined;
+    if(!mn_root_public(get_u64(b,M_ROOT),peer[0..65],true) or !ck_same(packet[MW_ORIGIN..MW_ORIGIN+65],peer[0..65])){
+        return false;
+    }
+    if(!ih_fingerprint(b[M_PUBLIC..M_PUBLIC+65],own_fp[0..10]) or !ih_fingerprint(peer[0..65],peer_fp[0..10])){
+        return false;
+    }
+    return mn_auto_policy(get_u64(b,M_AUTO_RECEIVE),get_u64(b,M_ACTIVE),true,packet[8],true,ck_hdr_admit(body,own_fp[0..10],peer_fp[0..10],body[0..0]) and ks_public_valid(body[52..117]));
+}
+fn mn_auto_bind(b:[]u8,packet:[]const u8,body:[]const u8)->bool {
+    // Called only after full envelope/neighbor/origin/circuit replay preflight succeeded.
+    if(!mn_auto_candidate(b,packet,body)){
+        return false;
+    }
+    const root:u64=get_u64(b,M_ROOT);
+    const directory:u64=get_u64(b,M_AUTO_DIRECTORY);
+    if(directory!=0 and !mn_directory_active(directory,false)){
+        return false;
+    }
+    if(!mn_root_pause(root,true)){
+        return false;
+    }
+    if(!mn_auto_candidate(b,packet,body)){
+        mn_auto_fail(b);
+        return false;
+    }
+    mw_copy(b[M_FINAL..M_FINAL+65],packet[MW_ORIGIN..MW_ORIGIN+65]);
+    if(!mn_bind_final(b)){
+        mn_auto_fail(b);
+        return false;
+    }
+    put_u64(b,M_ACTIVE,1);
+    // Unpause before UDP delivery: unpause deliberately discards old route datagrams.
+    if(!mn_root_pause(root,false)){
+        mn_auto_fail(b);
+        return false;
+    }
+    return true;
+}
+fn mn_auto_fail(b:[]u8)->void {
+    mn_root_pause(get_u64(b,M_ROOT),true);
+    mn_close_local(b);
+    put_u64(b,M_BOUND,0);
+    put_u64(b,M_ACTIVE,0);
+    put_u64(b,M_CIRCUIT_SET,0);
+    put_u64(b,M_AUTO_RECEIVE,0);
+    put_u64(b,M_AUTO_RESULT,2);
+    put_u64(b,M_ERROR,11);
+    put_u64(b,M_ROUTE_REASON,4);
+}
+test auto_receive_requires_explicit_policy_idle_pinned_origin_and_invite {
+    assert mn_auto_policy(1,0,true,1,true,true);
+    assert mn_auto_policy(1,0,true,2,true,true);
+    assert !mn_auto_policy(0,0,true,1,true,true);
+    assert !mn_auto_policy(1,1,true,1,true,true);
+    assert !mn_auto_policy(1,0,false,1,true,true);
+    assert !mn_auto_policy(1,0,true,3,true,true);
+    assert !mn_auto_policy(1,0,true,1,false,true);
+    assert !mn_auto_policy(1,0,true,1,true,false);
+    assert M_AUTO_RESULT+8<=M_NEIGHBORS;
+}
+pub fn mn_auto_take(p:u64)->u64 {
+    if(p==0){
+        return 0;
+    }
+    const v:MNView=mn_view(p);
+    const result:u64=get_u64(v.bytes,M_AUTO_RESULT);
+    put_u64(v.bytes,M_AUTO_RESULT,0);
+    return result;
+}

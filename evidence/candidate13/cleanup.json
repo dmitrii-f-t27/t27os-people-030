@@ -1,0 +1,16 @@
+{
+  "atUTC": "2026-11-27T22:37:47.163015+00:00",
+  "ownQAEndpointsStopped": [
+    {
+      "host": "M4",
+      "pid": 68797
+    },
+    {
+      "host": "M1",
+      "pid": 97869
+    }
+  ],
+  "beforeStop": "actual final receipt capture0/source0/audio ended, stable camera counters",
+  "otherProcessesSignalled": false,
+  "sourceHashesStillFrozen": true
+}

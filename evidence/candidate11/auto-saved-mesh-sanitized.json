@@ -1,0 +1,26 @@
+{
+  "scope": "two physical Macs same LAN; fresh RAM homes; saved authenticated Mesh endpoint with Auto preference; no third intermediary and no WAN claim",
+  "exactSymmetricRead": true,
+  "participants": [
+    {
+      "chatState": 4,
+      "selectedRoute": 2,
+      "peoplePreferredRoute": 3,
+      "meshNeighbors": 1,
+      "meshReadyNeighbors": 1,
+      "meshDelivered": 12,
+      "meshForwarding": 0,
+      "chatReadRx": 1
+    },
+    {
+      "chatState": 4,
+      "selectedRoute": 2,
+      "peoplePreferredRoute": 3,
+      "meshNeighbors": 1,
+      "meshReadyNeighbors": 1,
+      "meshDelivered": 26,
+      "meshForwarding": 0,
+      "chatReadRx": 1
+    }
+  ]
+}

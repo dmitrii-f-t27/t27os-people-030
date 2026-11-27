@@ -1,0 +1,21 @@
+{
+  "atUTC": "2026-11-27T22:08:37.117668+00:00",
+  "nativeShellObservationBy": "root independent physical GUI",
+  "passed": [
+    "M4 Antigravity selected before/after People Back",
+    "Queen panel open/close in QA (helper effects suppressed)",
+    "Keys opened with NVIDIA/ZAI fields in isolated QA profile",
+    "M1 contact search hides nonmatching row and restores on clear"
+  ],
+  "notClaimed": [
+    "live Orca provider/web: explicit QA FX_WEB gate suppresses it",
+    "iOS rebuilt or released",
+    "WAN transport",
+    "at-rest history encryption",
+    "safe reuse of a RAM QA data directory across changing local identities"
+  ],
+  "historyContract": "Existing history filename keyed by peer fingerprint; ordinary profile stays bound to stable Keychain identity. Use a fresh isolated data home per RAM identity; prior homes retained. No migration performed.",
+  "pending": [],
+  "paperclip": "root physical native NSOpenPanel PASS; separate receipt",
+  "finalReview": "independent reviewer13 PASS relayed by root; no remaining product blockers"
+}

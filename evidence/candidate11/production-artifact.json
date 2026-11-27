@@ -1,0 +1,10 @@
+{
+  "zip": "T27OS-0.3.0-b8580-People11.zip",
+  "zipSHA256": "e8447d21caf73cbcf44c4f3a26f5e09a4d37cdae0138da73881f45a41e369fab",
+  "executableSHA256": "983c17d491590b3fd812aa77a3c739b99a56d42ad15ab4c4b999664c0037992b",
+  "bundleIdentifier": "ai.t27.os",
+  "version": "0.3.0",
+  "build": "8580",
+  "scope": "ordinary production mode; no QA flags; extracted and strict/deep verified on physical M1 and M4 view; no personal process replaced",
+  "launchPathBothMacs": "/Volumes/SSDD/Workspaces/M4/t27/.claude/worktrees/t27os-people-ux-sol-20261127/target/people-ux/production11-unpacked/T27OS.app"
+}

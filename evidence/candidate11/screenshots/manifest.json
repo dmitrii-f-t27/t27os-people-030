@@ -1,0 +1,15 @@
+{
+  "candidate": "11",
+  "atUTC": "2026-11-27T22:03:37.793076+00:00",
+  "scope": "actual native full windows on both Macs: chat, authenticated Direct and Mesh; call explicitly synthetic source2 with cameras/mics off",
+  "sha256": {
+    "M4-connection-mesh.png": "42461a1d276c00d683ed76037db92fbc92ea8607790f0314f2c2e211bbb07ac1",
+    "M4-call-synthetic.png": "bb2451013c9c4c5e86db9bd38594e90287331d66a1897806193816400f33ec18",
+    "M1-connection-mesh.png": "a8e181c787c9f5971d44a23e7e63813775300da705305260b4ca89812ca2daba",
+    "M4-chat.png": "924ea730dfbac8cebeefa08bedd1e75a2489c27cb68c752bbacd18f30efb61c6",
+    "M1-call-synthetic.png": "eef7ad7f9553f8e61f280a8947857e4e243fbc00f4e3e393b9b7c793d3bc27a2",
+    "M4-connection-direct.png": "e38a717a0ae85461ff245437febbbf56749f51e040ba308110b0fd40e96a6fb2",
+    "M1-connection-direct.png": "bc80f0df299c894fe4803334a65c5bb7fe0c05cceae39faf261cbc890253da9e",
+    "M1-chat.png": "815104ce31f0562fd2c4a1ea2901df497d95fcb0bd8beba05a0f3b3f4e7e1f08"
+  }
+}

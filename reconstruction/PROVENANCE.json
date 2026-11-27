@@ -1,0 +1,13 @@
+{
+  "publicUpstream": "https://github.com/Trinity-S-AI-DNA/t27",
+  "publicBaseCommit": "1df5fbebf7a3d2f02d6a51e07854b78af902ae39",
+  "integratedBaselineTree": "a00c379e0f5d57c3999c2dbd87cbea4d50221dea",
+  "baselineReconstruction": "git apply --index reconstruction/INTEGRATED-BASE.patch; git write-tree => integratedBaselineTree",
+  "verification": "independently reconstructed on fresh shallow public master checkout; exact tree matched",
+  "finalDelta": "SOURCE-UX.patch; only six paths",
+  "attribution": "Inherited upstream and integrated baseline retain original authorship and license. This release records scoped owner-authorized derivative work, not newly authored inherited tree.",
+  "upstreamStatus": "Not merged. This independent source distribution grants no canonical path-write permission. Protected keys remain owner-only; host registry prerequisites remain binding.",
+  "finalReconstructedTree": "31cebc84f606bcd53b6fd4424343f1d16b4295e7",
+  "allSixFinalIndexHashesMatch": true,
+  "candidate": 13
+}

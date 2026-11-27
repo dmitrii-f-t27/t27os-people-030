@@ -1,0 +1,18 @@
+{
+  "atUTC": "2026-11-27T21:45:34.451569+00:00",
+  "baselineTree": "a00c379e0f5d57c3999c2dbd87cbea4d50221dea",
+  "files": {
+    "specs/t27os/glass_window.t27": "902004ef867c2e99d6c7663cc737b0298b8199e1584ace167a2a9fa0c2f18cb1",
+    "specs/t27os/local_comms_ui.t27": "2c052ebbd68fdcceca859fee4cc00715cead02ed98da54e9c2059b1001240f9e",
+    "specs/t27os/local_comms_bridge.t27": "596fc155f84770909a3684d2acb973361fe88cf6df6e6251f1b5a71c40935bc6",
+    "specs/t27os/mesh_native.t27": "98cc020cf7348940f1f15871b885af90ff61689694a7ffeff04dfdf132f6f969",
+    "specs/t27os/editors.t27": "4415588045bbf555886fe8f58392626fd4b5d20759b7ae2d6fe75fa5329f1cac",
+    "specs/t27os/chat_host.t27": "9776f00390f61304f5303ef3eb0adf1c032fad05b2dacee53cb50b39ea1221eb"
+  },
+  "scope": "reference People + guarded session activation/READ retry; no authentication-policy or wire-format changes",
+  "productionExecutableSHA256": "983c17d491590b3fd812aa77a3c739b99a56d42ad15ab4c4b999664c0037992b",
+  "qaExecutableSHA256": "9fa4fa071e15eaa731424e34d5c775fc8ba7db35870dc81c4bad46a420fc298c",
+  "qaArtifact": "People-UX-QA11-final.app",
+  "signing": "original M4 leaf211C; signed on SSD-backed local APFS; strict/deep exit0 on M4 actual APFS launch app and M1 physical SSD QA11-final copy; shared SMB path independently reverified by root",
+  "qaM4LaunchArtifact": "signing11-volume/People-UX-QA11.app"
+}

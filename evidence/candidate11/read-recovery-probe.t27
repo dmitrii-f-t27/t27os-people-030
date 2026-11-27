@@ -1,0 +1,231 @@
+module T27PeopleReadRecoveryProbe;
+use t27os::chat_host::chm_init;
+use t27os::chat_host::chm_open;
+use t27os::chat_host::chm_begin_verified;
+use t27os::chat_host::chm_read_packet;
+use t27os::chat_host::chm_read_sent;
+use t27os::chat_host::chm_stat;
+use t27os::chat_host::mp;
+use t27os::chat_host::mg;
+use t27os::chat_host::M_DIRTY;
+use t27os::chat_host::M_READ_UPTO;
+use t27os::chat_host::M_READ_SENT;
+use t27os::chat_host::M_LAST;
+use t27os::chat_host::CHM_SESSIONS;
+use t27os::chat_host::CHM_READ_TX;
+use t27os::chat_core::CL_KEEP;
+use t27os::chat_core::cl_init;
+use t27os::chat_core::cl_out_add;
+use t27os::chat_core::cl_state;
+use t27os::chat_core::ch_put_text;
+use t27os::chat_core::ch_rx_text;
+use t27os::chat_core::ch_put_ack;
+use t27os::chat_core::ch_rx_ack;
+use t27os::chat_core::ch_rx_read;
+use t27os::chat_core::CH_RX_NEW;
+use t27os::chat_core::CH_S_READ;
+use t27os::call_core::CK_ACTIVE;
+
+use t27os::chat_host::CHM_E_STATUS;
+use t27os::chat_host::chm_ack_plan;
+use t27os::chat_host::CHM_ACK_NOW;
+use t27os::chat_host::CHM_ACK_HOLD;
+use t27os::chat_host::CHM_ACK_NONE;
+use t27os::chat_host::chm_hold;
+use t27os::chat_host::chm_held;
+use t27os::chat_host::chm_saved_acks;
+use t27os::chat_host::CHM_ACK_HELD;
+use t27os::chat_host::CHM_ACK_FULL;
+use t27os::chat_host::CHM_LEN;
+use t27os::chat_host::CHM_INFO_WHY;
+use t27os::chat_host::CHM_OWED_MAX;
+use t27os::chat_host::M_OWED;
+use t27os::chat_host::M_HELD;
+use t27os::chat_core::cl_mark_sent;
+use t27os::chat_core::cl_tries;
+use t27os::chat_core::ch_kind;
+use t27os::chat_core::ch_msg;
+use t27os::chat_core::ch_part;
+use t27os::chat_core::CH_K_ACK;
+use t27os::chat_core::CH_RX_PART;
+use t27os::chat_core::CH_RX_DUP;
+use t27os::chat_core::CH_RX_BAD;
+use t27os::chat_core::CH_RX_FULL;
+
+test chm_open_reads_incoming_lines_once_and_keeps_the_highest_read_number {
+    var m : [384]u8 = undefined;
+    var la : [2072]u8 = undefined;
+    var lb : [16296]u8 = undefined;
+    var asm : [8064]u8 = undefined;
+    var z : usize = 0;
+    while (z < 8064) {
+        asm[z] = 0;
+        z = z + 1;
+    }
+    const fa : [10]u8 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const fb : [10]u8 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11];
+    assert chm_init(m[0..384], fb[0..10], 1, 2);
+    assert cl_init(la[0..2072], fb[0..10], 1);
+    assert cl_init(lb[0..16296], fa[0..10], 8);
+    // nothing incoming: nothing to read, no dirty mark
+    assert chm_open(m[0..384], lb[0..16296]) == false;
+    assert mg(m[0..384], M_READ_UPTO) == 0 and mg(m[0..384], M_DIRTY) == 0;
+    // two incoming lines arrive (messages 1 and 2 of the sender)
+    const x : [1]u8 = [120];
+    var k : u32 = 0;
+    while (k < 2) {
+        assert cl_out_add(la[0..2072], x[0..1], 10 + @as(u64, k)) == k + 1;
+        var p : [720]u8 = undefined;
+        const pn : usize = ch_put_text(p[0..720], k + 1, 0, 10, x[0..1]);
+        assert ch_rx_text(lb[0..16296], asm[0..8064], p[0..pn]) == CH_RX_NEW;
+        k = k + 1;
+    }
+    assert chm_open(m[0..384], lb[0..16296]);
+    assert mg(m[0..384], M_READ_UPTO) == 2 and mg(m[0..384], M_DIRTY) == 1;
+    // opened again: nothing new, the number stays
+    mp(m[0..384], M_DIRTY, 0);
+    assert chm_open(m[0..384], lb[0..16296]) == false;
+    assert mg(m[0..384], M_READ_UPTO) == 2 and mg(m[0..384], M_DIRTY) == 0;
+    // a stored higher number is never lowered by a lower one
+    mp(m[0..384], M_READ_UPTO, 9);
+    var p3 : [720]u8 = undefined;
+    const n3 : usize = ch_put_text(p3[0..720], 3, 0, 10, x[0..1]);
+    assert ch_rx_text(lb[0..16296], asm[0..8064], p3[0..n3]) == CH_RX_NEW;
+    assert chm_open(m[0..384], lb[0..16296]);
+    assert mg(m[0..384], M_READ_UPTO) == 9;
+}
+
+
+test an_incoming_line_is_acked_only_after_the_log_is_saved_and_a_failed_save_sends_nothing {
+    // a part kept for later is ACKed at once; a message that became a line, or a duplicate while one waits, is held
+    assert chm_ack_plan(CH_RX_PART, 0) == CHM_ACK_NOW and chm_ack_plan(CH_RX_DUP, 0) == CHM_ACK_NOW;
+    assert chm_ack_plan(CH_RX_NEW, 0) == CHM_ACK_HOLD and chm_ack_plan(CH_RX_NEW, 3) == CHM_ACK_HOLD;
+    assert chm_ack_plan(CH_RX_DUP, 1) == CHM_ACK_HOLD;
+    assert chm_ack_plan(CH_RX_BAD, 0) == CHM_ACK_NONE and chm_ack_plan(CH_RX_FULL, 1) == CHM_ACK_NONE;
+    var m : [384]u8 = undefined;
+    const fp : [10]u8 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    assert chm_init(m[0..384], fp[0..10], 1, 2);
+    assert chm_hold(m[0..384], 5, 3) and chm_hold(m[0..384], 6, 1);
+    // the sender resends message 5 while the save is pending: still one entry
+    assert chm_hold(m[0..384], 5, 3);
+    assert chm_held(m[0..384]) == 2 and chm_stat(m[0..384], CHM_ACK_HELD) == 3;
+    // the write failed: no ACK, the queue stays for the retry
+    var a : [400]u8 = undefined;
+    assert chm_saved_acks(m[0..384], false, a[0..400]) == 0 and chm_held(m[0..384]) == 2;
+    // the write went through: every part of 5 and the one part of 6, then nothing is held
+    assert chm_saved_acks(m[0..384], true, a[0..400]) == 4 and chm_held(m[0..384]) == 0;
+    assert ch_kind(a[0..20]) == CH_K_ACK and ch_msg(a[0..20]) == 5 and ch_part(a[0..20]) == 0;
+    assert ch_msg(a[40..60]) == 5 and ch_part(a[40..60]) == 2;
+    assert ch_msg(a[60..80]) == 6 and ch_part(a[60..80]) == 0;
+    assert chm_saved_acks(m[0..384], true, a[0..400]) == 0;
+    // the queue is bounded: the ninth message is not held, counted, and its resend is ACKed after the save
+    var k : u32 = 1;
+    while (k <= 8) {
+        assert chm_hold(m[0..384], k + 10, 1);
+        k = k + 1;
+    }
+    assert chm_hold(m[0..384], 99, 1) == false and chm_stat(m[0..384], CHM_ACK_FULL) == 1 and chm_held(m[0..384]) == 8;
+    // the slots of the queue sit after the group counters and inside the block
+    assert (M_OWED + CHM_OWED_MAX) * 8 <= CHM_LEN and M_HELD > @as(usize, CHM_INFO_WHY);
+}
+
+
+
+test a_lost_read_after_ack_retries_from_durable_history_once_per_verified_session {
+    var m : [384]u8 = undefined;
+    var receiver : [8168]u8 = undefined;
+    var sender : [2072]u8 = undefined;
+    var assembly : [8064]u8 = undefined;
+    var i : usize = 0;
+    while (i < 8064) { assembly[i] = 0; i = i + 1; }
+    const peer : [10]u8 = [1,2,3,4,5,6,7,8,9,10];
+    const other : [10]u8 = [1,2,3,4,5,6,7,8,9,11];
+    assert chm_init(m[0..384], peer[0..10], 1, 2);
+    assert cl_init(receiver[0..8168], peer[0..10], 4);
+    assert cl_init(sender[0..2072], other[0..10], 1);
+    assert cl_out_add(sender[0..2072], "read receipt recovery", 1) == 1;
+    var text : [720]u8 = undefined;
+    const tn : usize = ch_put_text(text[0..720], 1, 0, 1, "read receipt recovery");
+    assert ch_rx_text(receiver[0..8168], assembly[0..8064], text[0..tn]) == CH_RX_NEW;
+    var ack : [20]u8 = undefined;
+    const an : usize = ch_put_ack(ack[0..20], 1, 0);
+    assert ch_rx_ack(sender[0..2072], ack[0..an]);
+    assert cl_state(sender[0..2072], 0) == 3;
+    assert chm_open(m[0..384], receiver[0..8168]);
+    // The host has durably saved READ. Its first wire receipt is deliberately lost.
+    mp(m[0..384], M_DIRTY, 0);
+    var read : [20]u8 = undefined;
+    assert chm_read_packet(m[0..384], read[0..20]) == 20;
+    chm_read_sent(m[0..384], 2);
+    assert cl_state(sender[0..2072], 0) == 3;
+    assert chm_read_packet(m[0..384], read[0..20]) == 0;
+    // A wrong peer or a still-unverified session cannot mutate this frontier.
+    assert chm_begin_verified(m[0..384], receiver[0..8168], other[0..10], CK_ACTIVE, 90) == 0;
+    assert chm_begin_verified(m[0..384], receiver[0..8168], peer[0..10], 3, 90) == 0;
+    assert mg(m[0..384], M_READ_SENT) == 1 and mg(m[0..384], M_LAST) == 2;
+    assert chm_stat(m[0..384], CHM_SESSIONS) == 0;
+    // External-poll and ordinary driver ACTIVE dispatch share this same hook.
+    assert chm_begin_verified(m[0..384], receiver[0..8168], peer[0..10], CK_ACTIVE, 100) == 0;
+    assert mg(m[0..384], M_READ_UPTO) == 1 and mg(m[0..384], M_READ_SENT) == 0;
+    assert chm_stat(m[0..384], CHM_SESSIONS) == 1 and mg(m[0..384], M_LAST) == 100;
+    const rn : usize = chm_read_packet(m[0..384], read[0..20]);
+    assert rn == 20 and ch_rx_read(sender[0..2072], read[0..rn]) == 1;
+    chm_read_sent(m[0..384], 101);
+    assert cl_state(sender[0..2072], 0) == CH_S_READ;
+    assert chm_read_packet(m[0..384], read[0..20]) == 0;
+    assert chm_stat(m[0..384], CHM_READ_TX) == 2;
+    // Reloaded driver state restores a saved watermark without opening new lines.
+    assert chm_init(m[0..384], peer[0..10], 1, 2);
+    assert chm_begin_verified(m[0..384], receiver[0..8168], peer[0..10], CK_ACTIVE, 200) == 0;
+    assert mg(m[0..384], M_READ_UPTO) == 1;
+    assert cl_state(receiver[0..8168], 0) == CH_S_READ;
+}
+
+test activation_preserves_non_ui_capacity_evicted_watermark_and_unseen_state {
+    var m : [384]u8 = undefined;
+    var log : [67096]u8 = undefined;
+    const peer : [10]u8 = [1,2,3,4,5,6,7,8,9,10];
+    const other : [10]u8 = [1,2,3,4,5,6,7,8,9,11];
+    assert CL_KEEP >= 33;
+    assert cl_init(log[0..67096], peer[0..10], 33);
+    assert chm_init(m[0..384], peer[0..10], 1, 2);
+    mp(m[0..384], M_READ_UPTO, 9);
+    mp(m[0..384], M_READ_SENT, 9);
+    assert chm_begin_verified(m[0..384], log[0..67096], peer[0..10], CK_ACTIVE, 20) == 0;
+    assert chm_stat(m[0..384], CHM_SESSIONS) == 1;
+    assert mg(m[0..384], M_READ_UPTO) == 9 and mg(m[0..384], M_READ_SENT) == 0;
+    // The pinned log must agree even if driver and transport peer agree.
+    assert cl_init(log[0..67096], other[0..10], 33);
+    assert chm_begin_verified(m[0..384], log[0..67096], peer[0..10], CK_ACTIVE, 30) == 0;
+    assert chm_stat(m[0..384], CHM_SESSIONS) == 1 and mg(m[0..384], M_LAST) == 20;
+}
+
+test activation_preserves_delivered_read_and_unseen_lines_and_reports_retry_reset {
+    var m : [384]u8 = undefined;
+    var log : [8168]u8 = undefined;
+    var assembly : [8064]u8 = undefined;
+    var i : usize = 0;
+    while (i < 8064) { assembly[i] = 0; i = i + 1; }
+    const peer : [10]u8 = [1,2,3,4,5,6,7,8,9,10];
+    assert chm_init(m[0..384], peer[0..10], 1, 2);
+    assert cl_init(log[0..8168], peer[0..10], 4);
+    var text : [720]u8 = undefined;
+    const tn : usize = ch_put_text(text[0..720], 1, 0, 1, "not yet shown");
+    assert ch_rx_text(log[0..8168], assembly[0..8064], text[0..tn]) == CH_RX_NEW;
+    assert cl_out_add(log[0..8168], "already read", 2) == 1;
+    var packet : [20]u8 = undefined;
+    const rn : usize = ch_put_read(packet[0..20], 1);
+    assert ch_rx_read(log[0..8168], packet[0..rn]) == 1;
+    assert cl_out_add(log[0..8168], "already delivered", 3) == 2;
+    const an : usize = ch_put_ack(packet[0..20], 2, 0);
+    assert ch_rx_ack(log[0..8168], packet[0..an]);
+    assert cl_out_add(log[0..8168], "retry pending", 4) == 3;
+    cl_mark_sent(log[0..8168], 3, 5);
+    assert (chm_begin_verified(m[0..384], log[0..8168], peer[0..10], CK_ACTIVE, 20) & CHM_E_STATUS) != 0;
+    assert cl_state(log[0..8168], 0) == 3;
+    assert cl_state(log[0..8168], 1) == CH_S_READ;
+    assert cl_state(log[0..8168], 2) == 3;
+    assert cl_state(log[0..8168], 3) == 1 and cl_tries(log[0..8168], 3) == 0;
+    assert mg(m[0..384], M_READ_UPTO) == 0;
+    assert chm_read_packet(m[0..384], packet[0..20]) == 0;
+}

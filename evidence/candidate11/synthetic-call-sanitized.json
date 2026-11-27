@@ -1,0 +1,28 @@
+{
+  "phase": "explicitly-synthetic-video-only",
+  "realCameraUsed": false,
+  "participants": [
+    {
+      "audioState": 4,
+      "audioCaptureActive": 0,
+      "videoSource": 2,
+      "videoCameraFrames": 0,
+      "videoFramesSent": 6,
+      "videoFramesReceived": 9,
+      "videoNativeRenderedSerial": 9,
+      "peopleTestBadgeVisible": 1,
+      "peopleSelfPreviewVisible": 0
+    },
+    {
+      "audioState": 4,
+      "audioCaptureActive": 0,
+      "videoSource": 2,
+      "videoCameraFrames": 0,
+      "videoFramesSent": 12,
+      "videoFramesReceived": 6,
+      "videoNativeRenderedSerial": 6,
+      "peopleTestBadgeVisible": 1,
+      "peopleSelfPreviewVisible": 0
+    }
+  ]
+}

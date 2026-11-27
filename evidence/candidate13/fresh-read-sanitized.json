@@ -1,0 +1,24 @@
+{
+  "freshSymmetricRead": true,
+  "exactTwoReadRowsBoth": true,
+  "participants": [
+    {
+      "chatState": 4,
+      "messageCount": 2,
+      "chatReadRx": 1,
+      "chatReadTx": 1,
+      "peopleReadVisible": 1,
+      "cameraAuthorization": 3,
+      "macMicrophoneAuthorization": 3
+    },
+    {
+      "chatState": 4,
+      "messageCount": 2,
+      "chatReadRx": 1,
+      "chatReadTx": 1,
+      "peopleReadVisible": 1,
+      "cameraAuthorization": 3,
+      "macMicrophoneAuthorization": 3
+    }
+  ]
+}

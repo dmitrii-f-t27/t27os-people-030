@@ -1,0 +1,10 @@
+{
+  "atUTC": "2026-11-27T22:28:49.122536+00:00",
+  "kind": "retrospective source comparison; not an old-app runtime execution",
+  "oldCandidate": 11,
+  "oldActivationBlindlySetsVisibleTrue": true,
+  "currentCandidate": 13,
+  "currentActivationSynchronizesActualEligibility": true,
+  "beforeEvidence": "reviewer source ordering: activate true then sc_tick before render, actual native callback mapping; no backdated failing runtime claim",
+  "physicalCandidate12": "actual callback negative and native Back positive passed, but media diagnostic slot collision invalidates that diagnostic during video; candidate13 removes duplicated state entirely"
+}

@@ -1,0 +1,144 @@
+{
+  "phase": "real-duplex-physical-no-images",
+  "participants": [
+    "M4",
+    "M1"
+  ],
+  "imagesCaptured": false,
+  "duplex": [
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 395,
+      "audioAcceptedFrames": 413,
+      "audioNonzeroPlayback": 152054,
+      "audioMuted": 0,
+      "videoSource": 1,
+      "videoCameraFrames": 12,
+      "videoFramesSent": 12,
+      "videoFramesReceived": 33,
+      "videoNativeRenderedSerial": 33,
+      "peopleSelfPreviewImages": 4,
+      "peopleSelfPreviewVisible": 1,
+      "peopleRemoteVideoVisible": 1
+    },
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 442,
+      "audioAcceptedFrames": 304,
+      "audioNonzeroPlayback": 115829,
+      "audioMuted": 0,
+      "videoSource": 1,
+      "videoCameraFrames": 36,
+      "videoFramesSent": 36,
+      "videoFramesReceived": 11,
+      "videoNativeRenderedSerial": 11,
+      "peopleSelfPreviewImages": 14,
+      "peopleSelfPreviewVisible": 1,
+      "peopleRemoteVideoVisible": 1
+    }
+  ],
+  "muted": [
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 478,
+      "audioAcceptedFrames": 507,
+      "audioNonzeroPlayback": 184606,
+      "audioMuted": 1,
+      "videoSource": 1,
+      "videoCameraFrames": 15,
+      "videoFramesSent": 15,
+      "videoFramesReceived": 42,
+      "videoNativeRenderedSerial": 42,
+      "peopleSelfPreviewImages": 5,
+      "peopleSelfPreviewVisible": 1,
+      "peopleRemoteVideoVisible": 1
+    },
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 523,
+      "audioAcceptedFrames": 384,
+      "audioNonzeroPlayback": 146522,
+      "audioMuted": 0,
+      "videoSource": 1,
+      "videoCameraFrames": 44,
+      "videoFramesSent": 44,
+      "videoFramesReceived": 14,
+      "videoNativeRenderedSerial": 14,
+      "peopleSelfPreviewImages": 17,
+      "peopleSelfPreviewVisible": 1,
+      "peopleRemoteVideoVisible": 1
+    }
+  ],
+  "cameraOffKeepsCall": [
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 706,
+      "audioAcceptedFrames": 726,
+      "audioNonzeroPlayback": 269200,
+      "audioMuted": 0,
+      "videoSource": 0,
+      "videoCameraFrames": 24,
+      "videoFramesSent": 24,
+      "videoFramesReceived": 63,
+      "videoNativeRenderedSerial": 63,
+      "peopleSelfPreviewImages": 8,
+      "peopleSelfPreviewVisible": 0,
+      "peopleRemoteVideoVisible": 1
+    },
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 774,
+      "audioAcceptedFrames": 583,
+      "audioNonzeroPlayback": 188044,
+      "audioMuted": 0,
+      "videoSource": 1,
+      "videoCameraFrames": 67,
+      "videoFramesSent": 67,
+      "videoFramesReceived": 22,
+      "videoNativeRenderedSerial": 22,
+      "peopleSelfPreviewImages": 26,
+      "peopleSelfPreviewVisible": 1,
+      "peopleRemoteVideoVisible": 1
+    }
+  ],
+  "cameraOn": [
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 998,
+      "audioAcceptedFrames": 1019,
+      "audioNonzeroPlayback": 333398,
+      "audioMuted": 0,
+      "videoSource": 1,
+      "videoCameraFrames": 27,
+      "videoFramesSent": 27,
+      "videoFramesReceived": 91,
+      "videoNativeRenderedSerial": 91,
+      "peopleSelfPreviewImages": 9,
+      "peopleSelfPreviewVisible": 1,
+      "peopleRemoteVideoVisible": 1
+    },
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 1044,
+      "audioAcceptedFrames": 743,
+      "audioNonzeroPlayback": 252281,
+      "audioMuted": 0,
+      "videoSource": 1,
+      "videoCameraFrames": 92,
+      "videoFramesSent": 92,
+      "videoFramesReceived": 25,
+      "videoNativeRenderedSerial": 25,
+      "peopleSelfPreviewImages": 36,
+      "peopleSelfPreviewVisible": 1,
+      "peopleRemoteVideoVisible": 1
+    }
+  ]
+}
