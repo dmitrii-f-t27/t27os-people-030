@@ -7,6 +7,7 @@
   "finalDelta": "SOURCE-UX.patch; only six paths",
   "attribution": "Inherited upstream and integrated baseline retain original authorship and license. This release records scoped owner-authorized derivative work, not newly authored inherited tree.",
   "upstreamStatus": "Not merged. This independent source distribution grants no canonical path-write permission. Protected keys remain owner-only; host registry prerequisites remain binding.",
-  "finalReconstructedTree": "c136ae2e7edd661a6f1288c42c6f24c5ee3709a7",
-  "allSixFinalIndexHashesMatch": true
+  "finalReconstructedTree": "31cebc84f606bcd53b6fd4424343f1d16b4295e7",
+  "allSixFinalIndexHashesMatch": true,
+  "candidate": 13
 }

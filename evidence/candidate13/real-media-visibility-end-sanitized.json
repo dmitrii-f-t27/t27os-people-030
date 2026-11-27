@@ -1,0 +1,111 @@
+{
+  "candidate": 13,
+  "scope": "physical two-Mac same LAN, actual real duplex; no camera images captured",
+  "duplex": [
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 1134,
+      "audioAcceptedFrames": 1050,
+      "audioNonzeroPlayback": 103651,
+      "audioMuted": 0,
+      "videoSource": 1,
+      "videoCameraFrames": 11,
+      "videoFramesSent": 11,
+      "videoFramesReceived": 93,
+      "videoNativeRenderedSerial": 93,
+      "peopleSelfPreviewImages": 3,
+      "peopleSelfPreviewVisible": 1,
+      "peopleReadVisible": 0
+    },
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 1206,
+      "audioAcceptedFrames": 345,
+      "audioNonzeroPlayback": 120837,
+      "audioMuted": 0,
+      "videoSource": 1,
+      "videoCameraFrames": 107,
+      "videoFramesSent": 107,
+      "videoFramesReceived": 11,
+      "videoNativeRenderedSerial": 11,
+      "peopleSelfPreviewImages": 41,
+      "peopleSelfPreviewVisible": 1,
+      "peopleReadVisible": 0
+    }
+  ],
+  "muteUnmute": true,
+  "cameraOffOnPreservesAudio": true,
+  "closedCallChatDoesNotRead": true,
+  "openedCallChatReadsWithoutDroppingAudio": true,
+  "reverseMicrophoneCall": [
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 248,
+      "audioAcceptedFrames": 241,
+      "audioNonzeroPlayback": 40248,
+      "audioMuted": 0,
+      "videoSource": 0,
+      "videoCameraFrames": 0,
+      "videoFramesSent": 0,
+      "videoFramesReceived": 0,
+      "videoNativeRenderedSerial": 0,
+      "peopleSelfPreviewImages": 8,
+      "peopleSelfPreviewVisible": 0,
+      "peopleReadVisible": 1
+    },
+    {
+      "audioState": 4,
+      "audioCaptureActive": 1,
+      "audioInputCallbacks": 287,
+      "audioAcceptedFrames": 106,
+      "audioNonzeroPlayback": 38982,
+      "audioMuted": 0,
+      "videoSource": 0,
+      "videoCameraFrames": 0,
+      "videoFramesSent": 0,
+      "videoFramesReceived": 0,
+      "videoNativeRenderedSerial": 0,
+      "peopleSelfPreviewImages": 113,
+      "peopleSelfPreviewVisible": 0,
+      "peopleReadVisible": 1
+    }
+  ],
+  "ended": [
+    {
+      "audioState": 5,
+      "audioCaptureActive": 0,
+      "audioInputCallbacks": 329,
+      "audioAcceptedFrames": 322,
+      "audioNonzeroPlayback": 70927,
+      "audioMuted": 0,
+      "videoSource": 0,
+      "videoCameraFrames": 0,
+      "videoFramesSent": 0,
+      "videoFramesReceived": 0,
+      "videoNativeRenderedSerial": 0,
+      "peopleSelfPreviewImages": 8,
+      "peopleSelfPreviewVisible": 0,
+      "peopleReadVisible": 1
+    },
+    {
+      "audioState": 5,
+      "audioCaptureActive": 0,
+      "audioInputCallbacks": 376,
+      "audioAcceptedFrames": 167,
+      "audioNonzeroPlayback": 68192,
+      "audioMuted": 0,
+      "videoSource": 0,
+      "videoCameraFrames": 0,
+      "videoFramesSent": 0,
+      "videoFramesReceived": 0,
+      "videoNativeRenderedSerial": 0,
+      "peopleSelfPreviewImages": 113,
+      "peopleSelfPreviewVisible": 0,
+      "peopleReadVisible": 1
+    }
+  ],
+  "cameraStopped": true
+}

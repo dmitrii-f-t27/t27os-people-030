@@ -1,0 +1,13 @@
+{
+  "candidate": 13,
+  "zip": "T27OS-0.3.0-b8580-People13.zip",
+  "zipSHA256": "0e6a1d83b9411462f7b6d07fc652d4c5320df13570c4fc0d02191a336dd921d9",
+  "productionExecutableSHA256": "d17fc43455b5cf738b82ea7ef4fe0d6fc681fabb8433f9c8a56d70ce482c9af8",
+  "bundleIdentifier": "ai.t27.os",
+  "version": "0.3.0",
+  "build": "8580",
+  "ordinaryProductionMode": true,
+  "strictDeepVerification": "exit0 M4 and M1 after unpacking zip",
+  "localArtifactRelativePath": "production13-unpacked/T27OS.app",
+  "noOwnerInstallOrProfileReplaced": true
+}

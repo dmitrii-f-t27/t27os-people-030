@@ -15,9 +15,7 @@
     "safe reuse of a RAM QA data directory across changing local identities"
   ],
   "historyContract": "Existing history filename keyed by peer fingerprint; ordinary profile stays bound to stable Keychain identity. Use a fresh isolated data home per RAM identity; prior homes retained. No migration performed.",
-  "pending": [
-    "native foreground text file picker owner interaction",
-    "independent final reviewer",
-    "public scoped fork PR plus actionable upstream prerequisite"
-  ]
+  "pending": [],
+  "paperclip": "root physical native NSOpenPanel PASS; separate receipt",
+  "finalReview": "independent reviewer13 PASS relayed by root; no remaining product blockers"
 }

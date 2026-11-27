@@ -1,0 +1,16 @@
+{
+  "atUTC": "2026-11-27T22:28:14.927568+00:00",
+  "baselineTree": "a00c379e0f5d57c3999c2dbd87cbea4d50221dea",
+  "files": {
+    "specs/t27os/glass_window.t27": "902004ef867c2e99d6c7663cc737b0298b8199e1584ace167a2a9fa0c2f18cb1",
+    "specs/t27os/local_comms_ui.t27": "d6931769a1474af825ad9b1452637fde24838d85f5b00f40a4733ded98f0cba6",
+    "specs/t27os/local_comms_bridge.t27": "f2b162cc413ec93c0291958ecdde3ee5ba982b736976e594a5e3ff398b0283c2",
+    "specs/t27os/mesh_native.t27": "98cc020cf7348940f1f15871b885af90ff61689694a7ffeff04dfdf132f6f969",
+    "specs/t27os/editors.t27": "4415588045bbf555886fe8f58392626fd4b5d20759b7ae2d6fe75fa5329f1cac",
+    "specs/t27os/chat_host.t27": "9776f00390f61304f5303ef3eb0adf1c032fad05b2dacee53cb50b39ea1221eb"
+  },
+  "scope": "candidate13: visibility fix from12; actual read-only bridge visibility stat replaces colliding UI diagnostic slot; four other sources unchanged from11",
+  "productionExecutableSHA256": "d17fc43455b5cf738b82ea7ef4fe0d6fc681fabb8433f9c8a56d70ce482c9af8",
+  "qaExecutableSHA256": "b48392dafbf7db535ca0cc0c42133e63bf22ad1628a9c563723c76969fd24403",
+  "signing": "original M4 leaf211C; same QA ID/designated requirement; actual host strict/deep exit0"
+}

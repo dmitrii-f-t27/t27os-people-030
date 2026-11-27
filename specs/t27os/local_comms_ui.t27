@@ -514,7 +514,8 @@ fn lu_build(self:u64,parent:u64,mobile:bool)->void {
         if(operator_url!=0) { lu_text(self,lu_get(self,129),operator_url);dn_configure(lu_val(self,130),operator_url,false); }
         if(mode!=0) { lu_select_route(self,mode); }
     }
-    sc_visible(ctx,true);
+    // Reads remain closed until the first visible layout/tick establishes eligibility.
+    sc_visible(ctx,false);
     if(lu_qa()) {
         sc_audio_diagnostics(ctx,true);
     }
@@ -930,6 +931,7 @@ pub fn lu_tick(self:u64,command:u64,timer:u64)->void {
     if(p==0) {
         return;
     }
+    lu_sync_read_visibility(self);
     if(lu_val(self,2000)==1){
         lu_people_auto_idle(self);
         lu_people_auto_receive(self);
@@ -1003,7 +1005,7 @@ pub fn lu_inactive(self:u64,command:u64,event:u64)->void {
 }
 pub fn lu_active(self:u64,command:u64,event:u64)->void {
     lu_mark(self,115,1);
-    sc_visible(lu_ctx(self),true);
+    lu_sync_read_visibility(self);
 }
 pub fn lu_closed(self:u64,command:u64,event:u64)->void {
     lu_m0(lu_get(self,LP_HELPER_TIMER),lu_sel("invalidate"));
@@ -1060,7 +1062,7 @@ fn lu_report(self:u64)->void {
     const directory:u64=lu_val(self,130);
     lu_record(d,"selectedInternet",lu_val(self,141));
     lu_record(d,"selectedRoute",lu_val(self,141));
-    lu_record(d,"peopleLastAction",lu_val(self,LP_LAST_ACTION));lu_record(d,"peoplePreferredRoute",lu_val(self,LP_PREFERRED));lu_record(d,"peopleContactCount",lu_m0(lu_get(self,2011),lu_sel("count")));lu_record(d,"peopleSelectedContact",lu_val(self,2012));lu_record(d,"peopleHelperDetached",lu_val(self,LP_HELPER_DETACHED));lu_record(d,"peopleSelfPreviewImages",lu_val(self,2055));lu_record(d,"peopleAutoMeshAdoptions",lu_val(self,LP_AUTO_ADOPTIONS));lu_record(d,"peopleAutoReceiveFailures",lu_val(self,LP_AUTO_FAILURES));
+    lu_record(d,"peopleReadVisible",sc_stat(p,false,138));lu_record(d,"peopleLastAction",lu_val(self,LP_LAST_ACTION));lu_record(d,"peoplePreferredRoute",lu_val(self,LP_PREFERRED));lu_record(d,"peopleContactCount",lu_m0(lu_get(self,2011),lu_sel("count")));lu_record(d,"peopleSelectedContact",lu_val(self,2012));lu_record(d,"peopleHelperDetached",lu_val(self,LP_HELPER_DETACHED));lu_record(d,"peopleSelfPreviewImages",lu_val(self,2055));lu_record(d,"peopleAutoMeshAdoptions",lu_val(self,LP_AUTO_ADOPTIONS));lu_record(d,"peopleAutoReceiveFailures",lu_val(self,LP_AUTO_FAILURES));
     lu_record(d,"meshActive",mn_stat(lu_val(self,148),0));lu_record(d,"meshForwarding",mn_stat(lu_val(self,148),1));
     lu_record(d,"meshNeighbors",mn_stat(lu_val(self,148),2));lu_record(d,"meshReadyNeighbors",mn_stat(lu_val(self,148),3));
     lu_record(d,"meshForwarded",mn_stat(lu_val(self,148),4));lu_record(d,"meshDelivered",mn_stat(lu_val(self,148),5));
@@ -1367,7 +1369,7 @@ pub fn lu_embed_mac(parent:u64,window:u64)->u64 {
         lu_m0(scroll,lu_sel("retain"));
         lu_m1(parent,lu_sel("addSubview:"),scroll);
         lu_mark(saved,115,1);
-        sc_visible(lu_ctx(saved),true);
+        lu_sync_read_visibility(saved);
         if(lu_val(saved,141)==2){
             mn_active(lu_val(saved,148),true);
         }
@@ -2145,9 +2147,7 @@ test people_controls_follow_real_handshake_and_keep_end_available {
 fn lu_people_layout(self:u64)->void {
     if(lu_val(self,2013)==5){
         lu_people_previous_layout(self);
-        var visible:[4]f64=undefined;
-        lu_frame_value(lu_m1(lu_get(self,107),lu_sel("valueForKey:"),lu_cf("visibleRect")),lu_sel("getValue:"),visible);
-        sc_visible(lu_ctx(self),lu_val(self,115)==1 and visible[2]>0.0 and visible[3]>0.0);
+        lu_sync_read_visibility(self);
         return;
     }
     var frame:[4]f64=undefined;
@@ -2217,8 +2217,7 @@ fn lu_people_layout(self:u64)->void {
     lu_people_place(self,361,if(w<700.0) w-64.0 else w-150.0,16.0,if(w<700.0) 40.0 else 126.0,32.0,!detail and !add);
     lu_people_place(self,362,w-150.0,16.0,126.0,32.0,detail or add);
     const selected:u64=lu_val(self,2012);
-    const shown_peer:bool=selected>0 and selected<=lu_m0(cards,lu_sel("count")) and lu_m1(lu_get(self,145),lu_sel("isEqualToString:"),lu_m1(lu_m1(cards,lu_sel("objectAtIndex:"),selected-1),lu_sel("objectForKey:"),lu_cf("identity")))%256!=0;
-    sc_visible(lu_ctx(self),lu_people_reads_visible(panel,shown_peer,lu_val(self,115),call,lu_val(self,2052)));
+    lu_sync_read_visibility(self);
 
     if(selected>0 and selected<=lu_m0(cards,lu_sel("count"))){
         lu_text(self,lu_get(self,2022),lu_m1(lu_m1(cards,lu_sel("objectAtIndex:"),selected-1),lu_sel("objectForKey:"),lu_cf("name")));
@@ -2461,6 +2460,7 @@ fn lu_people_detach(self:u64)->void {
     lu_mark(self,LP_AUTO_CHANNEL,0);
     lu_inactive(self,0,0);
     sc_action(lu_ctx(self),false,5);
+    lu_sync_read_visibility(self);
     sc_tick(lu_ctx(self));
     dn_cancel_pending(lu_val(self,130));
     dn_route_active(lu_val(self,130),false);
@@ -2594,6 +2594,7 @@ fn lu_people_auto_tick(self:u64)->void {
     const camera:u64=lu_val(self,140);
     lu_mark(self,140,0);
     sc_action(p,audio,5);
+    lu_sync_read_visibility(self);
     sc_tick(p);
     dn_cancel_pending(lu_val(self,130));
     lu_select_route(self,mode);
@@ -3526,4 +3527,61 @@ test only_the_visible_pinned_conversation_can_mark_new_messages_read {
     assert !lu_people_reads_visible(1,true,1,false,0);
     assert !lu_people_reads_visible(0,false,1,false,0);
     assert !lu_people_reads_visible(0,true,0,false,0);
+}
+
+
+// Recompute before transport polling: activation must never temporarily open reads.
+fn lu_sync_read_visibility(self:u64)->void {
+    const p:u64=lu_ctx(self);
+    if(p==0){ return; }
+    var allowed:bool=lu_val(self,115)==1;
+    if(lu_val(self,2000)==1){
+        const window:u64=lu_get(self,114);
+        const scroll:u64=lu_get(self,2001);
+        const app:u64=lu_m0(lu_cls("NSApplication"),lu_sel("sharedApplication"));
+        const lifecycle:bool=lu_people_read_lifecycle(
+            lu_val(self,115),lu_val(self,LP_HELPER_DETACHED),
+            window!=0 and lu_bool_result(lu_m0(window,lu_sel("isVisible"))),
+            lu_bool_result(lu_m0(window,lu_sel("isMiniaturized"))),
+            lu_bool_result(lu_m0(app,lu_sel("isHidden"))),
+            scroll!=0 and !lu_bool_result(lu_m0(scroll,lu_sel("isHiddenOrHasHiddenAncestor")))
+        );
+        const panel:u64=lu_val(self,2013);
+        if(panel==5){
+            var rect:[4]f64=undefined;
+            rect[0]=0.0;
+            rect[1]=0.0;
+            rect[2]=0.0;
+            rect[3]=0.0;
+            lu_frame_value(lu_m1(lu_get(self,107),lu_sel("valueForKey:"),lu_cf("visibleRect")),lu_sel("getValue:"),rect);
+            allowed=lifecycle and rect[2]>0.0 and rect[3]>0.0;
+        }
+        else{
+            const cards:u64=lu_get(self,2011);
+            const selected:u64=lu_val(self,2012);
+            const pinned:bool=selected>0 and selected<=lu_m0(cards,lu_sel("count")) and lu_m1(lu_get(self,145),lu_sel("isEqualToString:"),lu_m1(lu_m1(cards,lu_sel("objectAtIndex:"),selected-1),lu_sel("objectForKey:"),lu_cf("identity")))%256!=0;
+            const audio:u32=sc_state(p,true);
+            allowed=lu_people_reads_visible(panel,pinned,if(lifecycle) 1 else 0,audio>0 and audio<5,lu_val(self,2052));
+        }
+    }
+    sc_visible(p,allowed);
+}
+
+pub fn lu_people_read_lifecycle(visible:u64,detached:u64,window_visible:bool,minimized:bool,app_hidden:bool,view_visible:bool)->bool {
+    return visible==1 and detached==0 and window_visible and !minimized and !app_hidden and view_visible;
+}
+
+test restored_connection_and_closed_call_chat_never_open_reads {
+    const restored:bool=lu_people_read_lifecycle(1,0,true,false,false,true);
+    assert restored;
+    assert !lu_people_reads_visible(2,true,if(restored) 1 else 0,false,0);
+    assert !lu_people_reads_visible(0,true,if(restored) 1 else 0,true,0);
+    assert lu_people_reads_visible(0,true,if(restored) 1 else 0,false,0);
+    assert lu_people_reads_visible(0,true,if(restored) 1 else 0,true,1);
+    assert !lu_people_read_lifecycle(0,0,true,false,false,true);
+    assert !lu_people_read_lifecycle(1,1,true,false,false,true);
+    assert !lu_people_read_lifecycle(1,0,false,false,false,true);
+    assert !lu_people_read_lifecycle(1,0,true,true,false,true);
+    assert !lu_people_read_lifecycle(1,0,true,false,true,true);
+    assert !lu_people_read_lifecycle(1,0,true,false,false,false);
 }

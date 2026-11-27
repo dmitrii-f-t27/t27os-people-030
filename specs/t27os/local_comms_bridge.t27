@@ -616,6 +616,8 @@ pub fn sc_stat(p:u64,audio:bool,k:u32)->u64 {
     }
     const v:SCView=sc_view(p);
     const at:usize=if(audio) CS_LEN else 0;
+    // Read-only QA visibility is the actual bridge flag, never a duplicated UI slot.
+    if(k==138) { return get_u64(v.bytes,SC_VISIBLE); }
     if(k==137) { return get_u64(v.bytes,SC_ROUTE_PAUSED); }
     if(k==135) {
         return if(cs_audio_capture_running(v.bytes[at..at+CS_LEN])) 1 else 0;

@@ -486,7 +486,7 @@ index 34d274e9e..1805a6b4f 100644
 +    assert !gw_people_qa_start_allowed(true,false);
 +}
 diff --git a/specs/t27os/local_comms_bridge.t27 b/specs/t27os/local_comms_bridge.t27
-index 74c225f9c..568a9a375 100644
+index 74c225f9c..b2e8560ce 100644
 --- a/specs/t27os/local_comms_bridge.t27
 +++ b/specs/t27os/local_comms_bridge.t27
 @@ -37,6 +37,8 @@ use t27os::call_session::cs_relay_stop;
@@ -546,7 +546,16 @@ index 74c225f9c..568a9a375 100644
          if(e!=0) {
              chm_saved(v.bytes[SC_DRIVER..SC_DRIVER_END],v.bytes[0..CS_LEN],sc_save(v.bytes));
          }
-@@ -937,6 +940,7 @@ pub fn sc_video_stop(p:u64)->void {
+@@ -613,6 +616,8 @@ pub fn sc_stat(p:u64,audio:bool,k:u32)->u64 {
+     }
+     const v:SCView=sc_view(p);
+     const at:usize=if(audio) CS_LEN else 0;
++    // Read-only QA visibility is the actual bridge flag, never a duplicated UI slot.
++    if(k==138) { return get_u64(v.bytes,SC_VISIBLE); }
+     if(k==137) { return get_u64(v.bytes,SC_ROUTE_PAUSED); }
+     if(k==135) {
+         return if(cs_audio_capture_running(v.bytes[at..at+CS_LEN])) 1 else 0;
+@@ -937,6 +942,7 @@ pub fn sc_video_stop(p:u64)->void {
          cvl_stop(camera);
      }
      cs_set(v.bytes[CS_LEN..2*CS_LEN],CS_K_VIDEO,0);
@@ -554,7 +563,7 @@ index 74c225f9c..568a9a375 100644
      put_u64(v.bytes,SC_VIDEO_SOURCE,0);
      put_u64(v.bytes,SC_CAMERA_STATE,0);
  }
-@@ -958,6 +962,7 @@ fn sc_camera_tick(p:u64)->void {
+@@ -958,6 +964,7 @@ fn sc_camera_tick(p:u64)->void {
      }
      var jpeg:[24000]u8=undefined;
      const n:usize=cvl_take(camera,jpeg[0..24000]);
@@ -562,7 +571,7 @@ index 74c225f9c..568a9a375 100644
      if(n>0 and cs_video_feed(v.bytes[CS_LEN..2*CS_LEN],jpeg[0..n])) {
          cs_set(v.bytes[CS_LEN..2*CS_LEN],CS_K_VIDEO,1);
      }
-@@ -1094,3 +1099,37 @@ pub fn sc_mesh_sign(p:u64,message:u64,length:u64,out:u64,capacity:u64)->u64 {
+@@ -1094,3 +1101,37 @@ pub fn sc_mesh_sign(p:u64,message:u64,length:u64,out:u64,capacity:u64)->u64 {
  test mesh_signer_and_bound_constructor_are_null_safe {
   assert sc_mesh_sign(0,0,128,0,80)==0;assert sc_open_bound(0,true,0,2130706433)==0;
  }
@@ -601,7 +610,7 @@ index 74c225f9c..568a9a375 100644
 +    assert !sc_chat_activation_consumed(3,3,4);
 +}
 diff --git a/specs/t27os/local_comms_ui.t27 b/specs/t27os/local_comms_ui.t27
-index 86e166085..797ecbb5e 100644
+index 86e166085..d1959e1de 100644
 --- a/specs/t27os/local_comms_ui.t27
 +++ b/specs/t27os/local_comms_ui.t27
 @@ -414,11 +414,11 @@ fn lu_build(self:u64,parent:u64,mobile:bool)->void {
@@ -650,7 +659,17 @@ index 86e166085..797ecbb5e 100644
          lu_mark(self,159,if(identity_mode==0) 1 else 0);lu_mesh_load(self);
          const stored:u64=lu_m1(defaults,lu_sel("objectForKey:"),lu_cf("T27PeopleRouteModeV2"));
          const mode:u64=lu_preference_route(stored!=0,lu_m0(stored,lu_sel("unsignedLongLongValue")),lu_m1(defaults,lu_sel("integerForKey:"),lu_cf("T27PeopleInternet")));
-@@ -635,6 +636,10 @@ fn lu_dispatch(self:u64,tag:u64)->void {
+@@ -513,7 +514,8 @@ fn lu_build(self:u64,parent:u64,mobile:bool)->void {
+         if(operator_url!=0) { lu_text(self,lu_get(self,129),operator_url);dn_configure(lu_val(self,130),operator_url,false); }
+         if(mode!=0) { lu_select_route(self,mode); }
+     }
+-    sc_visible(ctx,true);
++    // Reads remain closed until the first visible layout/tick establishes eligibility.
++    sc_visible(ctx,false);
+     if(lu_qa()) {
+         sc_audio_diagnostics(ctx,true);
+     }
+@@ -635,6 +637,10 @@ fn lu_dispatch(self:u64,tag:u64)->void {
      if(p==0) {
          return;
      }
@@ -661,7 +680,7 @@ index 86e166085..797ecbb5e 100644
      lu_set(self,122,0,1);
      const directory:u64=lu_val(self,130);
      const routed:bool=lu_val(self,141)==1;
-@@ -694,6 +699,7 @@ fn lu_dispatch(self:u64,tag:u64)->void {
+@@ -694,6 +700,7 @@ fn lu_dispatch(self:u64,tag:u64)->void {
          }
      }
      if(tag==31) {
@@ -669,7 +688,7 @@ index 86e166085..797ecbb5e 100644
          sc_video_stop(p);
          if(sc_stat(p,true,132)==6) {
              sc_action(p,true,5);
-@@ -712,7 +718,7 @@ fn lu_dispatch(self:u64,tag:u64)->void {
+@@ -712,7 +719,7 @@ fn lu_dispatch(self:u64,tag:u64)->void {
          if(!mn_pair(lu_val(self,148),pasted)){lu_error(self,"Mesh pair refused. Paste the final recipient public key; add mutually trusted neighbor Mesh cards separately.");return;}
          const key:u64=mn_public_card(pasted);const same:bool=lu_m1(key,lu_sel("isEqualToString:"),lu_get(self,145))%256!=0;
          if(!same){lu_text(self,lu_get(self,104),lu_cf(""));lu_text(self,lu_get(self,105),lu_cf(""));}
@@ -678,7 +697,7 @@ index 86e166085..797ecbb5e 100644
      }
      if(tag==1) {
          const pasted:u64=lu_string(self,lu_get(self,106));
-@@ -736,6 +742,7 @@ fn lu_dispatch(self:u64,tag:u64)->void {
+@@ -736,6 +743,7 @@ fn lu_dispatch(self:u64,tag:u64)->void {
              sc_route_pause(p,false);lu_mark(self,142,if(routed) 0 else 1);
              lu_text(self,lu_get(self,106),lu_cf(""));
              lu_status(self,"Friend selected for this path. Connect, then compare both codes.");
@@ -686,7 +705,7 @@ index 86e166085..797ecbb5e 100644
          }
      }
      if(tag==2) {
-@@ -775,6 +782,7 @@ fn lu_dispatch(self:u64,tag:u64)->void {
+@@ -775,6 +783,7 @@ fn lu_dispatch(self:u64,tag:u64)->void {
          lu_mark(self,111,if(mute==0) 1 else 0);
      }
      if(tag==11) {
@@ -694,7 +713,7 @@ index 86e166085..797ecbb5e 100644
          if(dn_state(directory,29)!=0) { dn_cancel_pending(directory); }
          lu_mark(self,140,0); sc_video_stop(p);
          lu_m1(lu_get(self,123),lu_sel("setImage:"),0);
-@@ -810,8 +818,8 @@ fn lu_dispatch(self:u64,tag:u64)->void {
+@@ -810,8 +819,8 @@ fn lu_dispatch(self:u64,tag:u64)->void {
              lu_error(self,"Relay selection refused. Pair first, end calls, enter owner relay IPv4/port49301 and choose opposite roles.");
          }
      }
@@ -705,7 +724,7 @@ index 86e166085..797ecbb5e 100644
          if(share==0) { lu_error(self,"Contact card not copied: choose a unicast IPv4 assigned to this device, or leave the mesh field blank for Wi-Fi/Ethernet. Internet shares only the public key."); return; }
          if(lu_mobile(self)) {
              const item:u64=lu_new("NSMutableDictionary");
-@@ -858,6 +866,7 @@ fn lu_render(self:u64)->void {
+@@ -858,6 +867,7 @@ fn lu_render(self:u64)->void {
          }
      }
      if(sc_state(p,true)!=4) {
@@ -713,7 +732,7 @@ index 86e166085..797ecbb5e 100644
          lu_mark(self,124,0);
          lu_m1(lu_get(self,123),lu_sel("setImage:"),0);
      }
-@@ -869,7 +878,7 @@ fn lu_render(self:u64)->void {
+@@ -869,7 +879,7 @@ fn lu_render(self:u64)->void {
      const internet:bool=lu_val(self,141)==1;
      lu_mesh_layout(self);
      if(lu_val(self,141)==2){lu_m1(status,lu_sel("appendString:"),mn_status(lu_val(self,148)));lu_m1(status,lu_sel("appendString:"),lu_cf("\n"));}
@@ -722,7 +741,7 @@ index 86e166085..797ecbb5e 100644
      lu_m1(lu_get(self,129),lu_sel("setHidden:"),if(internet) 0 else 1);
      lu_m1(lu_get(self,146),lu_sel("setHidden:"),if(internet) 1 else 0);
      lu_m1(lu_get(self,340),lu_sel("setHidden:"),if(internet) 0 else 1);
-@@ -885,7 +894,7 @@ fn lu_render(self:u64)->void {
+@@ -885,7 +895,7 @@ fn lu_render(self:u64)->void {
          lu_m1(status,lu_sel("appendString:"),error);
          lu_m1(status,lu_sel("appendString:"),lu_cf("\n"));
      }
@@ -731,7 +750,7 @@ index 86e166085..797ecbb5e 100644
      if(sc_stat(p,true,136)==1) {
          lu_m1(status,lu_sel("appendString:"),lu_cf("\nListening only: microphone off; silence sent as keepalive."));
      }
-@@ -914,21 +923,54 @@ fn lu_render(self:u64)->void {
+@@ -914,21 +924,55 @@ fn lu_render(self:u64)->void {
      lu_m1(lu_get(self,107),lu_sel(if(lu_mobile(self)) "setText:" else "setString:"),transcript);
      lu_m1(lu_get(self,304),lu_sel("setEnabled:"),if(chat==3 and cc!=0) 1 else 0);
      lu_m1(lu_get(self,308),lu_sel("setEnabled:"),if(audio==3 and ac!=0) 1 else 0);
@@ -744,6 +763,7 @@ index 86e166085..797ecbb5e 100644
      }
 -    if(lu_val(self,141)==1) { dn_tick(lu_val(self,130)); }
 -    if(lu_val(self,141)==2) { mn_tick(lu_val(self,148)); }
++    lu_sync_read_visibility(self);
 +    if(lu_val(self,2000)==1){
 +        lu_people_auto_idle(self);
 +        lu_people_auto_receive(self);
@@ -790,7 +810,7 @@ index 86e166085..797ecbb5e 100644
          lu_m1(lu_get(self,123),lu_sel("setImage:"),0);
          lu_audio_deactivate(self);
      }
-@@ -941,7 +983,10 @@ pub fn lu_tick(self:u64,command:u64,timer:u64)->void {
+@@ -941,7 +985,10 @@ pub fn lu_tick(self:u64,command:u64,timer:u64)->void {
          lu_render(self);
          if(lu_val(self,116)==1) {
              lu_control(self);
@@ -802,8 +822,12 @@ index 86e166085..797ecbb5e 100644
      }
  }
  pub fn lu_inactive(self:u64,command:u64,event:u64)->void {
-@@ -961,19 +1006,29 @@ pub fn lu_active(self:u64,command:u64,event:u64)->void {
-     sc_visible(lu_ctx(self),true);
+@@ -958,22 +1005,32 @@ pub fn lu_inactive(self:u64,command:u64,event:u64)->void {
+ }
+ pub fn lu_active(self:u64,command:u64,event:u64)->void {
+     lu_mark(self,115,1);
+-    sc_visible(lu_ctx(self),true);
++    lu_sync_read_visibility(self);
  }
  pub fn lu_closed(self:u64,command:u64,event:u64)->void {
 +    lu_m0(lu_get(self,LP_HELPER_TIMER),lu_sel("invalidate"));
@@ -833,15 +857,15 @@ index 86e166085..797ecbb5e 100644
  }
  fn lu_read_word(dst:[1]u64,src:u64,n:u64)->u64 {
      return @extern("memmove");
-@@ -1005,6 +1060,7 @@ fn lu_report(self:u64)->void {
+@@ -1005,6 +1062,7 @@ fn lu_report(self:u64)->void {
      const directory:u64=lu_val(self,130);
      lu_record(d,"selectedInternet",lu_val(self,141));
      lu_record(d,"selectedRoute",lu_val(self,141));
-+    lu_record(d,"peopleLastAction",lu_val(self,LP_LAST_ACTION));lu_record(d,"peoplePreferredRoute",lu_val(self,LP_PREFERRED));lu_record(d,"peopleContactCount",lu_m0(lu_get(self,2011),lu_sel("count")));lu_record(d,"peopleSelectedContact",lu_val(self,2012));lu_record(d,"peopleHelperDetached",lu_val(self,LP_HELPER_DETACHED));lu_record(d,"peopleSelfPreviewImages",lu_val(self,2055));lu_record(d,"peopleAutoMeshAdoptions",lu_val(self,LP_AUTO_ADOPTIONS));lu_record(d,"peopleAutoReceiveFailures",lu_val(self,LP_AUTO_FAILURES));
++    lu_record(d,"peopleReadVisible",sc_stat(p,false,138));lu_record(d,"peopleLastAction",lu_val(self,LP_LAST_ACTION));lu_record(d,"peoplePreferredRoute",lu_val(self,LP_PREFERRED));lu_record(d,"peopleContactCount",lu_m0(lu_get(self,2011),lu_sel("count")));lu_record(d,"peopleSelectedContact",lu_val(self,2012));lu_record(d,"peopleHelperDetached",lu_val(self,LP_HELPER_DETACHED));lu_record(d,"peopleSelfPreviewImages",lu_val(self,2055));lu_record(d,"peopleAutoMeshAdoptions",lu_val(self,LP_AUTO_ADOPTIONS));lu_record(d,"peopleAutoReceiveFailures",lu_val(self,LP_AUTO_FAILURES));
      lu_record(d,"meshActive",mn_stat(lu_val(self,148),0));lu_record(d,"meshForwarding",mn_stat(lu_val(self,148),1));
      lu_record(d,"meshNeighbors",mn_stat(lu_val(self,148),2));lu_record(d,"meshReadyNeighbors",mn_stat(lu_val(self,148),3));
      lu_record(d,"meshForwarded",mn_stat(lu_val(self,148),4));lu_record(d,"meshDelivered",mn_stat(lu_val(self,148),5));
-@@ -1016,7 +1072,7 @@ fn lu_report(self:u64)->void {
+@@ -1016,7 +1074,7 @@ fn lu_report(self:u64)->void {
      lu_record(d,"meshOversize",mn_stat(lu_val(self,148),18));lu_record(d,"meshForwardBytes",mn_stat(lu_val(self,148),19));
      lu_record(d,"meshDeliveredBytes",mn_stat(lu_val(self,148),20));lu_record(d,"meshHopLimit",mn_stat(lu_val(self,148),22));
      if(lu_val(self,116)==1 and sc_stat(p,false,100)==3){
@@ -850,7 +874,7 @@ index 86e166085..797ecbb5e 100644
          const peer:u64=mn_recipient(lu_val(self,148));if(peer!=0){lu_m2(d,lu_sel("setObject:forKey:"),peer,lu_cf("qaSelectedPublicCard"));}
      }
      lu_record(d,"meshEndpointReady",lu_val(self,142));
-@@ -1044,10 +1100,15 @@ fn lu_report(self:u64)->void {
+@@ -1044,10 +1102,15 @@ fn lu_report(self:u64)->void {
      lu_record(d,"directPeerCandidates",dn_state(directory,28));
      if(lu_get(self,121)!=0) { lu_m2(d,lu_sel("setObject:forKey:"),lu_get(self,121),lu_cf("initDiagnostics")); }
      lu_record(d,"localOnly",1);
@@ -866,7 +890,7 @@ index 86e166085..797ecbb5e 100644
      lu_record(d,"chatState",sc_state(p,false));
      lu_record(d,"audioState",sc_state(p,true));
      lu_record(d,"chatCode",sc_code(p,false));
-@@ -1143,6 +1204,7 @@ fn lu_control(self:u64)->void {
+@@ -1143,6 +1206,7 @@ fn lu_control(self:u64)->void {
              if(port!=0) {
                  lu_text(self,lu_get(self,105),port);
              }
@@ -874,7 +898,7 @@ index 86e166085..797ecbb5e 100644
              const peer:u64=lu_m1(d,lu_sel("objectForKey:"),lu_cf("peerCard"));if(peer!=0){lu_text(self,lu_get(self,106),peer);}
              const neighbor:u64=lu_m1(d,lu_sel("objectForKey:"),lu_cf("neighborCard"));if(neighbor!=0){lu_text(self,lu_get(self,149),neighbor);}
              const slot:u64=lu_m1(d,lu_sel("objectForKey:"),lu_cf("meshSlot"));if(slot!=0){lu_text(self,lu_get(self,150),slot);}
-@@ -1295,10 +1357,34 @@ pub fn lu_prepare_public_friend(card:u64)->bool {
+@@ -1295,10 +1359,34 @@ pub fn lu_prepare_public_friend(card:u64)->bool {
  
  // The existing glass window owns this native page. Back closes transport and media.
  pub fn lu_embed_mac(parent:u64,window:u64)->u64 {
@@ -888,7 +912,7 @@ index 86e166085..797ecbb5e 100644
 +        lu_m0(scroll,lu_sel("retain"));
 +        lu_m1(parent,lu_sel("addSubview:"),scroll);
 +        lu_mark(saved,115,1);
-+        sc_visible(lu_ctx(saved),true);
++        lu_sync_read_visibility(saved);
 +        if(lu_val(saved,141)==2){
 +            mn_active(lu_val(saved,148),true);
 +        }
@@ -910,7 +934,7 @@ index 86e166085..797ecbb5e 100644
          lu_method(cls,"peopleInactive:","lu_inactive","v@:@");
          lu_method(cls,"peopleActive:","lu_active","v@:@");
          lu_method(cls,"peopleClosed:","lu_closed","v@:@");
-@@ -1313,57 +1399,55 @@ pub fn lu_embed_mac(parent:u64,window:u64)->u64 {
+@@ -1313,57 +1401,55 @@ pub fn lu_embed_mac(parent:u64,window:u64)->u64 {
      var vc:u64=lu_cls("T27PeopleFlippedView");
      if(vc==0) {
          vc=lu_allocate(lu_cls("NSView"),"T27PeopleFlippedView",0);
@@ -1001,7 +1025,7 @@ index 86e166085..797ecbb5e 100644
  }
  pub fn lu_video_allowed(consent:u64,state:u32)->bool { return consent==1 and state==4; }
  test people_camera_requires_explicit_request_and_verified_session {
-@@ -1427,24 +1511,50 @@ pub fn lu_route_action(tag:u64)->bool {
+@@ -1427,24 +1513,50 @@ pub fn lu_route_action(tag:u64)->bool {
      return tag==1 or (tag>=2 and tag<=10) or tag==12 or tag==30 or tag==33 or tag==34 or tag==42 or tag==43 or tag==46 or tag==47;
  }
  fn lu_select_route(self:u64,mode:u64)->void {
@@ -1019,10 +1043,7 @@ index 86e166085..797ecbb5e 100644
 -        lu_error(self,"End or cancel the current session before switching Direct / Internet / Mesh.");return;
 +        lu_error(self,"End or cancel the current session before switching Direct / Internet / Mesh.");
 +        return;
-     }
--    if((mode==1 and directory==0) or (mode==2 and lu_val(self,148)==0)){lu_error(self,"Selected path controller is unavailable. The current path was preserved; reopen People to retry.");return;}
--    if((directory!=0 and !dn_route_active(directory,false)) or (lu_val(self,141)==2 and !mn_active(lu_val(self,148),false)) or !sc_route_pause(p,true)) { lu_error(self,"Path change refused while a session is pending.");return; }
--    lu_mark(self,141,mode);lu_mark(self,124,0);lu_mark(self,140,0);lu_m1(lu_get(self,123),lu_sel("setImage:"),0);
++    }
 +    if((mode==1 and directory==0) or (mode==2 and lu_val(self,148)==0)){
 +        lu_error(self,"Selected path controller is unavailable. The current path was preserved; reopen People to retry.");
 +        return;
@@ -1030,7 +1051,10 @@ index 86e166085..797ecbb5e 100644
 +    if((directory!=0 and !dn_route_active(directory,false)) or (lu_val(self,141)==2 and !mn_active(lu_val(self,148),false)) or !sc_route_pause(p,true)) {
 +        lu_error(self,"Path change refused while a session is pending.");
 +        return;
-+    }
+     }
+-    if((mode==1 and directory==0) or (mode==2 and lu_val(self,148)==0)){lu_error(self,"Selected path controller is unavailable. The current path was preserved; reopen People to retry.");return;}
+-    if((directory!=0 and !dn_route_active(directory,false)) or (lu_val(self,141)==2 and !mn_active(lu_val(self,148),false)) or !sc_route_pause(p,true)) { lu_error(self,"Path change refused while a session is pending.");return; }
+-    lu_mark(self,141,mode);lu_mark(self,124,0);lu_mark(self,140,0);lu_m1(lu_get(self,123),lu_sel("setImage:"),0);
 +    lu_mark(self,141,mode);
 +    lu_mark(self,124,0);
 +    lu_mark(self,140,0);
@@ -1064,7 +1088,7 @@ index 86e166085..797ecbb5e 100644
      }
      const defaults:u64=lu_m0(lu_cls("NSUserDefaults"),lu_sel("standardUserDefaults"));
      lu_m2(defaults,lu_sel("setInteger:forKey:"),if(mode==1) 1 else 0,lu_cf("T27PeopleInternet"));
-@@ -1479,12 +1589,11 @@ pub fn lu_preference_route(has_new:bool,value:u64,legacy:u64)->u64 {
+@@ -1479,12 +1591,11 @@ pub fn lu_preference_route(has_new:bool,value:u64,legacy:u64)->u64 {
      return if(legacy==1) 1 else 0;
  }
  fn lu_connect_selected(self:u64,audio:bool)->bool {
@@ -1080,7 +1104,7 @@ index 86e166085..797ecbb5e 100644
      const mesh:u64=lu_val(self,148);var ok:bool=false;
      if(tag==54){ok=mn_forward(mesh,mn_stat(mesh,1)==0);}
      if(tag==52){
-@@ -1495,13 +1604,14 @@ fn lu_mesh_control(self:u64,tag:u64)->void {
+@@ -1495,13 +1606,14 @@ fn lu_mesh_control(self:u64,tag:u64)->void {
      if(tag==53 or tag==56){
          var raw:[16]u8=undefined;const n:usize=lu_bytes(lu_string(self,lu_get(self,if(tag==53) 150 else 151)),raw[0..16]);
          const value:u64=lu_port_bytes(raw[0..n]);
@@ -1096,7 +1120,7 @@ index 86e166085..797ecbb5e 100644
      const mesh:bool=lu_val(self,141)==2;
      const layout:u64=if(mesh) 3 else 1;
      if(lu_val(self,156)!=layout){
-@@ -1582,3 +1692,1838 @@ fn lu_mesh_load(self:u64)->void {
+@@ -1582,3 +1694,1894 @@ fn lu_mesh_load(self:u64)->void {
      if(lu_m1(hops,lu_sel("isKindOfClass:"),lu_cls("NSNumber"))%256!=0 and mn_hops(lu_val(self,148),lu_m0(hops,lu_sel("unsignedLongLongValue")))){lu_text(self,lu_get(self,151),lu_m0(hops,lu_sel("stringValue")));}
      // Forwarding consent, readiness and circuit epochs are never persisted.
  }
@@ -1553,9 +1577,7 @@ index 86e166085..797ecbb5e 100644
 +fn lu_people_layout(self:u64)->void {
 +    if(lu_val(self,2013)==5){
 +        lu_people_previous_layout(self);
-+        var visible:[4]f64=undefined;
-+        lu_frame_value(lu_m1(lu_get(self,107),lu_sel("valueForKey:"),lu_cf("visibleRect")),lu_sel("getValue:"),visible);
-+        sc_visible(lu_ctx(self),lu_val(self,115)==1 and visible[2]>0.0 and visible[3]>0.0);
++        lu_sync_read_visibility(self);
 +        return;
 +    }
 +    var frame:[4]f64=undefined;
@@ -1625,8 +1647,7 @@ index 86e166085..797ecbb5e 100644
 +    lu_people_place(self,361,if(w<700.0) w-64.0 else w-150.0,16.0,if(w<700.0) 40.0 else 126.0,32.0,!detail and !add);
 +    lu_people_place(self,362,w-150.0,16.0,126.0,32.0,detail or add);
 +    const selected:u64=lu_val(self,2012);
-+    const shown_peer:bool=selected>0 and selected<=lu_m0(cards,lu_sel("count")) and lu_m1(lu_get(self,145),lu_sel("isEqualToString:"),lu_m1(lu_m1(cards,lu_sel("objectAtIndex:"),selected-1),lu_sel("objectForKey:"),lu_cf("identity")))%256!=0;
-+    sc_visible(lu_ctx(self),lu_people_reads_visible(panel,shown_peer,lu_val(self,115),call,lu_val(self,2052)));
++    lu_sync_read_visibility(self);
 +
 +    if(selected>0 and selected<=lu_m0(cards,lu_sel("count"))){
 +        lu_text(self,lu_get(self,2022),lu_m1(lu_m1(cards,lu_sel("objectAtIndex:"),selected-1),lu_sel("objectForKey:"),lu_cf("name")));
@@ -1869,6 +1890,7 @@ index 86e166085..797ecbb5e 100644
 +    lu_mark(self,LP_AUTO_CHANNEL,0);
 +    lu_inactive(self,0,0);
 +    sc_action(lu_ctx(self),false,5);
++    lu_sync_read_visibility(self);
 +    sc_tick(lu_ctx(self));
 +    dn_cancel_pending(lu_val(self,130));
 +    dn_route_active(lu_val(self,130),false);
@@ -2002,6 +2024,7 @@ index 86e166085..797ecbb5e 100644
 +    const camera:u64=lu_val(self,140);
 +    lu_mark(self,140,0);
 +    sc_action(p,audio,5);
++    lu_sync_read_visibility(self);
 +    sc_tick(p);
 +    dn_cancel_pending(lu_val(self,130));
 +    lu_select_route(self,mode);
@@ -2934,6 +2957,63 @@ index 86e166085..797ecbb5e 100644
 +    assert !lu_people_reads_visible(1,true,1,false,0);
 +    assert !lu_people_reads_visible(0,false,1,false,0);
 +    assert !lu_people_reads_visible(0,true,0,false,0);
++}
++
++
++// Recompute before transport polling: activation must never temporarily open reads.
++fn lu_sync_read_visibility(self:u64)->void {
++    const p:u64=lu_ctx(self);
++    if(p==0){ return; }
++    var allowed:bool=lu_val(self,115)==1;
++    if(lu_val(self,2000)==1){
++        const window:u64=lu_get(self,114);
++        const scroll:u64=lu_get(self,2001);
++        const app:u64=lu_m0(lu_cls("NSApplication"),lu_sel("sharedApplication"));
++        const lifecycle:bool=lu_people_read_lifecycle(
++            lu_val(self,115),lu_val(self,LP_HELPER_DETACHED),
++            window!=0 and lu_bool_result(lu_m0(window,lu_sel("isVisible"))),
++            lu_bool_result(lu_m0(window,lu_sel("isMiniaturized"))),
++            lu_bool_result(lu_m0(app,lu_sel("isHidden"))),
++            scroll!=0 and !lu_bool_result(lu_m0(scroll,lu_sel("isHiddenOrHasHiddenAncestor")))
++        );
++        const panel:u64=lu_val(self,2013);
++        if(panel==5){
++            var rect:[4]f64=undefined;
++            rect[0]=0.0;
++            rect[1]=0.0;
++            rect[2]=0.0;
++            rect[3]=0.0;
++            lu_frame_value(lu_m1(lu_get(self,107),lu_sel("valueForKey:"),lu_cf("visibleRect")),lu_sel("getValue:"),rect);
++            allowed=lifecycle and rect[2]>0.0 and rect[3]>0.0;
++        }
++        else{
++            const cards:u64=lu_get(self,2011);
++            const selected:u64=lu_val(self,2012);
++            const pinned:bool=selected>0 and selected<=lu_m0(cards,lu_sel("count")) and lu_m1(lu_get(self,145),lu_sel("isEqualToString:"),lu_m1(lu_m1(cards,lu_sel("objectAtIndex:"),selected-1),lu_sel("objectForKey:"),lu_cf("identity")))%256!=0;
++            const audio:u32=sc_state(p,true);
++            allowed=lu_people_reads_visible(panel,pinned,if(lifecycle) 1 else 0,audio>0 and audio<5,lu_val(self,2052));
++        }
++    }
++    sc_visible(p,allowed);
++}
++
++pub fn lu_people_read_lifecycle(visible:u64,detached:u64,window_visible:bool,minimized:bool,app_hidden:bool,view_visible:bool)->bool {
++    return visible==1 and detached==0 and window_visible and !minimized and !app_hidden and view_visible;
++}
++
++test restored_connection_and_closed_call_chat_never_open_reads {
++    const restored:bool=lu_people_read_lifecycle(1,0,true,false,false,true);
++    assert restored;
++    assert !lu_people_reads_visible(2,true,if(restored) 1 else 0,false,0);
++    assert !lu_people_reads_visible(0,true,if(restored) 1 else 0,true,0);
++    assert lu_people_reads_visible(0,true,if(restored) 1 else 0,false,0);
++    assert lu_people_reads_visible(0,true,if(restored) 1 else 0,true,1);
++    assert !lu_people_read_lifecycle(0,0,true,false,false,true);
++    assert !lu_people_read_lifecycle(1,1,true,false,false,true);
++    assert !lu_people_read_lifecycle(1,0,false,false,false,true);
++    assert !lu_people_read_lifecycle(1,0,true,true,false,true);
++    assert !lu_people_read_lifecycle(1,0,true,false,true,true);
++    assert !lu_people_read_lifecycle(1,0,true,false,false,false);
 +}
 diff --git a/specs/t27os/mesh_native.t27 b/specs/t27os/mesh_native.t27
 index 37ef55a7c..f625445b2 100644

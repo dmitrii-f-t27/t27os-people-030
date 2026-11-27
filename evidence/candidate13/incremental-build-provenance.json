@@ -1,0 +1,14 @@
+{
+  "source": "canonical native12 make output; only local_comms_ui and local_comms_bridge rebuilt from frozen13 .t27; same canonical nm/nmedit and ld flags",
+  "reusedInputsSHA256": {
+    "glass_window.o": "481dbf5b430bcf35d9bd913d65b2254d13207867948a49777d8f6ff6eb3f494e",
+    "directory_native.local.o": "c6ab671fc65a1d98e8a77bd70cf74c03638390265fca58914a51be7bb0741677",
+    "mesh_native.local.o": "f9559127e29457e90aa4483d38f32bc6553b60f917839c8f8152617e8fd5f8a8",
+    "pty_server.o": "b1b3f4dc255e8925a4869549a3d4e71dcef3e493b72228df396aa3980e554b11",
+    "queen_chat_cli.o": "419fd9585d51e328c37fdc5f2ef8d4029d4555f10a275bdc510bc188903bdbdd",
+    "account_connector.o": "96b610d4ea3b618363f16662ddea61072354b1317982721996738e1bf5ceceaf",
+    "plist_main.o": "c416e0c597ffbf9a762d7ad2fafd6015d002b26279973ea2bfd4113d6bc1341d"
+  },
+  "allReusedInputsMatch12": true,
+  "compilerSHA256": "99ce538a63d2f551655863dcd42fef0eb83174e4f958aabd21b261f976a91777"
+}
