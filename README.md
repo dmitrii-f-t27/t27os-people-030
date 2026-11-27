@@ -40,3 +40,5 @@ Focused activation/READ-retry probe from11: 5 tests /90 runtime assertions. Fina
 Ordinary shell selection, Queen panel and Keys navigation were exercised in isolated QA. Live Orca web/provider effects were suppressed by QA and are not claimed. iOS was not rebuilt or released. Existing histories use peer-only filenames: keep an ordinary profile bound to its stable Keychain identity and use a new isolated home for each ephemeral RAM identity. No history migration or at-rest encryption is claimed.
 
 Canonical landing follows maintainer registry-first guidance in upstream #14166. Existing #14154 covers editors host classification; missing Mesh classification needs its own reviewed prerequisite. This source distribution does not change those policies.
+
+The actionable canonical Mesh registry prerequisite is [upstream PR14316](https://github.com/Trinity-S-AI-DNA/t27/pull/14316). [Editors registry PR14154](https://github.com/Trinity-S-AI-DNA/t27/pull/14154) remains separate; the integrated product discussion is [PR14166](https://github.com/Trinity-S-AI-DNA/t27/pull/14166). These links do not claim canonical CI or merge.
